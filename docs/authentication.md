@@ -56,6 +56,28 @@ and JWK metadata policy without calling JavaScript APIs.
 Access tokens remain valid until expiry despite refresh-token revocation: Identity
 does not currently expose introspection. Do not promise immediate global logout.
 
+## Staging interoperability diagnostics
+
+On 2026-10-05 the real Subscribe callback reached token exchange but rejected its
+ID token. The checked-in Identity signer and public staging discovery/JWKS were
+compared with the consumer: `JWT` / `RS256`, `token_use=id`, original nonce, exact
+issuer, same-origin JWKS, and a valid 2048-bit RSA signing JWK all match. Therefore
+removing nonce, token-kind, or signature requirements is not an acceptable repair.
+
+When `ENVIRONMENT=staging`, rejected verification now emits only categorical
+constants (`identity_verification_rejected stage=... category=...`). Stages separate
+framing/schema, issuer, token kind, time, nonce, audience, scope, key discovery,
+platform cryptography, and signature mismatch. No token, claim value, subject,
+authorization code, or key is formatted. Production emits none of these diagnostics.
+Inspect only the matching console log messages from tail JSON; never print complete
+callback request URLs because their query includes one-use credentials.
+
+The diagnostic classifier has a focused regression test retaining all acceptance
+rules. `cargo +stable check -p billing --target wasm32-unknown-unknown --locked -j 2`
+passed locally using the repository `.cache/cargo-target` directory. The next probe
+is one fresh staging authorization flow and its categorical rejection, followed by
+a concrete consumer repair if warranted; diagnosis alone is not closed-loop success.
+
 ## References and rationale
 
 - [Workers WebCrypto](https://developers.cloudflare.com/workers/runtime-apis/web-crypto/):

@@ -163,22 +163,23 @@ pub async fn verify(req: &Request, env: &Env) -> Result<Principal, AuthError> {
 
 /// Verify a compact token under a caller-supplied trusted policy.
 ///
-/// `_env` deliberately supplies no fallback keys or alternate issuers. Unknown keys trigger
+/// `env` supplies diagnostic environment only, never fallback keys or alternate issuers. Unknown keys trigger
 /// one coalesced refresh per isolate every 30 seconds; token-supplied key URLs are ignored.
 pub async fn verify_token(
     token: &str,
-    _env: &Env,
+    env: &Env,
     policy: &ValidationPolicy,
 ) -> Result<Principal, AuthError> {
-    validate_policy(policy)?;
+    validate_policy(policy).map_err(|error| rejection(env, "policy", error))?;
     if token.len() > 16_384 {
-        return Err(AuthError::Unauthorized);
+        return Err(rejection(env, "token_size", AuthError::Unauthorized));
     }
     let parts: Vec<_> = token.split('.').collect();
     if parts.len() != 3 {
-        return Err(AuthError::Unauthorized);
+        return Err(rejection(env, "compact", AuthError::Unauthorized));
     }
-    let header: Header = decode_json(parts[0])?;
+    let header: Header =
+        decode_json(parts[0]).map_err(|error| rejection(env, "header_json", error))?;
     if header.alg != "RS256"
         || header.typ != "JWT"
         || header.kid.is_empty()
@@ -186,22 +187,105 @@ pub async fn verify_token(
         || header.crit.is_some()
         || header.b64.is_some()
     {
-        return Err(AuthError::Unauthorized);
+        return Err(rejection(env, "header_policy", AuthError::Unauthorized));
     }
-    let claims: Claims = decode_json(parts[1])?;
-    let principal = validate_claims(claims, policy, now())?;
+    let claims: Claims =
+        decode_json(parts[1]).map_err(|error| rejection(env, "claims_json", error))?;
+    let timestamp = now();
+    let claim_stage = claim_rejection_stage(&claims, policy, timestamp);
+    let principal = validate_claims(claims, policy, timestamp)
+        .map_err(|error| rejection(env, claim_stage, error))?;
     let signature = URL_SAFE_NO_PAD
         .decode(parts[2])
-        .map_err(|_| AuthError::Unauthorized)?;
+        .map_err(|_| rejection(env, "signature_encoding", AuthError::Unauthorized))?;
     if signature.len() < 256 || signature.len() > 1024 {
-        return Err(AuthError::Unauthorized);
+        return Err(rejection(env, "signature_size", AuthError::Unauthorized));
     }
-    let key = signing_key(&policy.issuer, &header.kid).await?;
+    let key = signing_key(&policy.issuer, &header.kid)
+        .await
+        .map_err(|error| rejection(env, "jwks", error))?;
     let input = format!("{}.{}", parts[0], parts[1]);
-    if !verify_signature(&key, &signature, input.as_bytes()).await? {
-        return Err(AuthError::Unauthorized);
+    if !verify_signature(&key, &signature, input.as_bytes())
+        .await
+        .map_err(|error| rejection(env, "webcrypto", error))?
+    {
+        return Err(rejection(
+            env,
+            "signature_mismatch",
+            AuthError::Unauthorized,
+        ));
     }
     Ok(principal)
+}
+
+/// Stage-only diagnostics are categorical constants, never untrusted token material.
+fn rejection(env: &Env, stage: &'static str, error: AuthError) -> AuthError {
+    if env
+        .var("ENVIRONMENT")
+        .is_ok_and(|value| value.to_string() == "staging")
+    {
+        worker::console_warn!(
+            "identity_verification_rejected stage={} category={}",
+            stage,
+            error
+        );
+    }
+    error
+}
+
+/// Classifies claim failures without serializing, logging, or returning a claim value.
+fn claim_rejection_stage(c: &Claims, p: &ValidationPolicy, timestamp: i64) -> &'static str {
+    if c.iss != p.issuer {
+        return "issuer";
+    }
+    if c.token_use != p.token_use {
+        return "token_kind";
+    }
+    if c.sub.is_empty() || c.sub.len() > 256 || c.sub.chars().any(char::is_control) {
+        return "subject_format";
+    }
+    if c.iat < 0
+        || c.exp <= c.iat
+        || c.exp <= timestamp - SKEW
+        || c.iat > timestamp + SKEW
+        || c.nbf
+            .is_some_and(|nbf| nbf > timestamp + SKEW || nbf > c.exp)
+    {
+        return "token_time";
+    }
+    if p.nonce
+        .as_ref()
+        .is_some_and(|nonce| c.nonce.as_ref() != Some(nonce))
+    {
+        return "nonce";
+    }
+    let audiences: Vec<&str> = match &c.aud {
+        Audience::One(a) => vec![a.as_str()],
+        Audience::Many(a) => a.iter().map(String::as_str).collect(),
+    };
+    let Some(audience) = audiences
+        .iter()
+        .find(|a| p.audiences.iter().any(|expected| expected == **a))
+    else {
+        return "audience";
+    };
+    if (p.token_use == "access" && audiences.len() != 1)
+        || (audiences.len() > 1 && c.azp.as_deref() != Some(*audience))
+        || c.azp.as_deref().is_some_and(|azp| azp != *audience)
+        || (p.token_use == "access" && c.client_id.as_deref().is_some_and(|id| id != *audience))
+    {
+        return "authorized_party";
+    }
+    if p.required_scope.as_ref().is_some_and(|scope| {
+        !c.scope
+            .as_deref()
+            .unwrap_or("")
+            .split_ascii_whitespace()
+            .any(|value| value == scope)
+    }) {
+        return "scope";
+    }
+    "claims_policy"
 }
 
 fn decode_json<T: serde::de::DeserializeOwned>(part: &str) -> Result<T, AuthError> {
@@ -518,6 +602,35 @@ mod tests {
     #[test]
     fn accepts_provider_access_contract() {
         assert_eq!(check(claims(), &policy()).unwrap().subject, "pairwise");
+    }
+    #[test]
+    fn classifies_rejections_without_exposing_claim_values() {
+        let mut p = policy();
+        p.token_use = "id".into();
+        p.nonce = Some("private-transaction-value".into());
+        p.required_scope = None;
+        let mut c = claims();
+        c["token_use"] = json!("id");
+        c["nonce"] = json!("private-transaction-value");
+        let parsed: Claims = serde_json::from_value(c.clone()).unwrap();
+        assert_eq!(claim_rejection_stage(&parsed, &p, 1000), "claims_policy");
+        assert!(validate_claims(parsed, &p, 1000).is_ok());
+        for (field, value, stage) in [
+            ("nonce", json!("different-private-value"), "nonce"),
+            ("iss", json!("https://other.example"), "issuer"),
+            ("token_use", json!("access"), "token_kind"),
+            ("aud", json!("another-client"), "audience"),
+            ("iat", json!(1031), "token_time"),
+        ] {
+            let mut invalid = c.clone();
+            invalid[field] = value;
+            let parsed: Claims = serde_json::from_value(invalid).unwrap();
+            assert_eq!(claim_rejection_stage(&parsed, &p, 1000), stage);
+            assert_eq!(
+                validate_claims(parsed, &p, 1000),
+                Err(AuthError::Unauthorized)
+            );
+        }
     }
     #[test]
     fn rejects_wrong_identity_kind_audience_and_times() {
