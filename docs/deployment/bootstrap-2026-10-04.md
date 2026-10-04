@@ -86,8 +86,10 @@ using observed cold-build evidence.
 A subsequent proxy-backed guest probe uncovered a distinct real runtime defect:
 Subscribe `/healthz`, `/api/catalog`, and `/api/session` returned 200, but `/` and
 `/index.html` returned raw 500. This isolates failure to the static-assets response
-path rather than Billing bindings or OIDC credentials. The Subscribe owner is
-repairing immutable asset-response header mutation before the acceptance release.
+path rather than Billing bindings or OIDC credentials. The Subscribe owner fixed
+immutable asset-response header mutation by cloning its headers while preserving
+stream/status/cache semantics; the successful warm release and actual edge probes
+are recorded in [the release note](release-2026-10-05.md).
 Do not mark the first deployment accepted merely because the upload succeeded;
 the actual UI must load and the browser journey must close.
 

@@ -12,6 +12,7 @@ Choose the trust boundary first, then read only the relevant reference.
 | Server-side account/profile/subscription consumer | [Billing consumers](references/consumers.md) |
 | Subscribe checkout or Account subscription section | [Frontend integration](references/frontend.md) |
 | Local administrator code issuance and recovery | [Administrator operations](references/admin.md) |
+| Register or update deployment-owned plans | [Plan operations](references/plans.md) |
 
 ## Invariants
 

@@ -1,24 +1,28 @@
 # Local administrator issuance
 
+This release is deployed to staging only. See the [staging acceptance report](validation/staging-e2e-2026-10-05.md) for the end-to-end result; production has not been deployed.
+
 ## Setup
 
 Run `node scripts/admin-key.mjs --init` once. It generates 32 random bytes in the ignored repository-local `.secrets/billing-admin-key`. The create-only command never rotates an existing key. POSIX permissions are owner-only; Windows removes inherited ACLs and grants the current user full control. Neither the human nor an agent needs to inspect the value.
 
-Provision that file into the selected Worker's `BILLING_ADMIN_KEY` through a subprocess stdin, never a command argument, terminal output, GitHub log, or frontend bundle. Provision `ADMIN_EMAIL` separately; the requested initial administrator mailbox is `moesegfault@outlook.com`. It is replaceable without editing code. Cloudflare's `EMAIL` send binding must permit only the sender `subscribe@moesegfault.dev`, and the domain must be enabled for Email Sending.
+Provision that file into the selected Worker's `BILLING_ADMIN_KEY` through a subprocess stdin, never a command argument, terminal output, GitHub log, or frontend bundle. Provision `ADMIN_EMAIL` separately from private environment configuration; do not embed its recipient value in source or documentation. It is replaceable without editing code. Cloudflare's `EMAIL` send binding must permit only the sender `subscribe@moesegfault.dev`, and the domain must be enabled for Email Sending.
+
+`node scripts/deployment-secrets.mjs` is the private staging provisioning command. It requires the repository-local secret sources prepared by the deployment operator and prints only secret names and provisioning status. Do not print or copy those source contents into a terminal transcript or agent context.
 
 The key is intentionally an administrator capability: possession authorizes issuance. Keep the workstation account and secret backups protected. Ignoring a file in Git does not protect it against local malware or a compromised account.
 
 ## Issue and recover
 
 ```powershell
-node scripts/admin-issue.mjs --plan PLAN_ID
-# Production is always explicit.
-node scripts/admin-issue.mjs --plan PLAN_ID --environment production
+node scripts/admin-issue.mjs --plan platform-monthly
 # Use the printed non-secret UUID after timeout or interrupted execution.
 node scripts/admin-issue.mjs --resume ORIGINAL_UUID
 ```
 
 The script defaults to staging, accepts only the fixed staging / production billing origins, refuses redirects, has a 20-second request deadline, and stores the original non-secret intent under `.secrets/issuance/`. Recovery replays exactly that plan, environment, and UUID. No credential or activation code is printed or stored in the intent.
+
+The production selector is reserved for a separately provisioned future deployment; it does not deploy or configure production. Choose other plan IDs from `infra/plans.staging.json`. To register a plan, edit that catalog, run `npm run plans:sync` and `npm run plans:check`, and commit the catalog plus synchronized Worker configuration for CI deployment. See [plan operations](../skills/moesegfault-billing/references/plans.md).
 
 `POST /v1/admin/activation-codes` receives `{ "plan_id": "..." }` and the intent UUID in `Idempotency-Key`. The response is a status-only receipt. The server generates and emails the capability; it never returns a raw code to the caller.
 
