@@ -18,8 +18,13 @@ assets through the platform's static-assets binding.
 | Sender | `subscribe@moesegfault.dev` |
 
 Wrangler configs pin bindings, domains, audiences, and the plan catalog. Creating a
-new plan means editing `PLAN_REGISTRY_JSON` with a stable plan/product ID and the
-three localized names/descriptions, then releasing Billing. Never change the
+new plan means editing `infra/plans.staging.json` with a stable plan/product ID and
+the three localized names/descriptions, running `npm run plans:sync`, then
+committing the catalog plus generated `PLAN_REGISTRY_JSON` variable and releasing
+Billing. `npm run plans:check` and deployment tests reject an unsynchronized
+catalog; the sync tool checks the same stable IDs, three locales, bounded duration
+and entitlement identifiers as Rust's registry parser. Rust remains the runtime
+authority. Never change the
 meaning of an existing plan ID to reinterpret previously granted subscriptions.
 Adding arbitrary new request origins to Identity is not required for an OAuth
 redirect client.
@@ -46,6 +51,10 @@ deploy **staging only**; a candidate branch may use manual `staging-only` dispat
 while `verify-only` dispatch and pull requests never deploy. No production job or
 configuration exists, and an initial main push needs no skip-CI exception or
 duplicate bootstrap dispatch.
+
+Post-release smoke retries initial DNS/edge propagation for at most 90 seconds
+per endpoint. Rust's hosted job deadline is 15 minutes (first cold run completed
+in 5 minutes 15 seconds); frontend is 10 minutes, package/deploy are 8 each.
 
 `worker-build` is pinned to 0.8.6, matching `worker` 0.8.6. Its upstream release
 explicitly pins `cargo-platform` for Rust 1.88 compatibility. The neighboring

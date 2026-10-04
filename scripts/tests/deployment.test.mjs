@@ -2,6 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { validateCatalog } from '../deployment-plans.mjs';
 
 /** Read this repository's JSON Wrangler configuration. */
 async function config(service) {
@@ -36,6 +37,9 @@ test('billing accepts only registered staging audience and valid deployment-owne
   assert.equal(settings.d1_databases[0].binding, 'BILLING_DB');
   assert.deepEqual(JSON.parse(settings.vars.BILLING_AUDIENCES), ['subscribe-staging']);
   const plans = JSON.parse(settings.vars.PLAN_REGISTRY_JSON);
+  const catalog = JSON.parse(await readFile(new URL('../../infra/plans.staging.json', import.meta.url), 'utf8'));
+  validateCatalog(catalog);
+  assert.deepEqual(plans, catalog, 'human-editable catalog must be synchronized before release');
   assert.ok(plans.length > 0);
   assert.equal(new Set(plans.map((plan) => plan.id)).size, plans.length);
   for (const plan of plans) {
@@ -44,6 +48,14 @@ test('billing accepts only registered staging audience and valid deployment-owne
   }
   assert.deepEqual(settings.send_email, [{ name: 'EMAIL', allowed_sender_addresses: ['subscribe@moesegfault.dev'] }]);
   for (const secret of ['BILLING_ADMIN_KEY', 'ADMIN_EMAIL']) assert.equal(settings.vars[secret], undefined);
+});
+
+test('catalog rejects duplicate IDs, missing localization, excessive duration, and unsafe entitlements', async () => {
+  const plans = JSON.parse(await readFile(new URL('../../infra/plans.staging.json', import.meta.url), 'utf8'));
+  assert.throws(() => validateCatalog([plans[0], plans[0]]), /duplicate/);
+  assert.throws(() => validateCatalog([{ ...plans[0], duration_days: 3651 }]), /duration/);
+  assert.throws(() => validateCatalog([{ ...plans[0], name: { en: 'English only' } }]), /localization/);
+  assert.throws(() => validateCatalog([{ ...plans[0], entitlements: ['https://attacker.invalid'] }]), /entitlement/);
 });
 
 test('client registration contains only public exact staging metadata', async () => {
