@@ -6,6 +6,24 @@ import './styles.css';
 /** A profile never borrows an unverified email from OIDC claims. */
 const emptyProfile: BillingProfile = { display_name: '', email: '', country: '', address_line1: '', address_line2: '', city: '', postal_code: '', tax_id: '' };
 
+/** Only stable, allowlisted callback outcomes may select recovery copy. */
+export function authRecoveryCode(search: string): 'login_denied' | 'login_failed' | undefined {
+  const code = new URLSearchParams(search).get('auth_error');
+  return code === 'login_denied' || code === 'login_failed' ? code : undefined;
+}
+
+/** Recovery is explicit user navigation, never an automatic sign-in redirect loop. */
+export function AuthRecovery({ search, locale, authenticated, embedded }: { search: string; locale: Locale; authenticated: boolean; embedded: boolean }) {
+  const code = authRecoveryCode(search);
+  if (!code) return null;
+  const t = messages[locale];
+  return <div className="notice notice-error" role="alert">
+    <p>{code === 'login_denied' ? t.loginDenied : t.loginFailed}</p>
+    {authenticated && <p>{t.previousSession}</p>}
+    <a href={loginPath(search)} target={embedded ? '_top' : undefined}>{t.loginRetry}</a>
+  </div>;
+}
+
 /** Localize actionable failure classes, not arbitrary server or vendor messages. */
 export function errorMessage(error: unknown, locale: Locale): string {
   const t = messages[locale];
@@ -158,6 +176,7 @@ export default function App() {
   const requestedPlan = query.get('plan');
   const viewerName = session?.user?.name || session?.user?.sub;
   const content = <>
+    <AuthRecovery search={location.search} locale={locale} authenticated={session?.authenticated ?? false} embedded={embedded} />
     {loading && <div className="panel loading" role="status"><span className="loading-dot" aria-hidden="true" />{t.loading}</div>}
     {!loading && loadError && <div className="panel"><Notice error={loadError} locale={locale} /><button className="moe-button" onClick={() => void load()}>{t.retry}</button></div>}
     {!loading && session && !session.authenticated && <section className="panel login-panel"><div className="login-emblem" aria-hidden="true">◇</div><h2>{t.loginTitle}</h2><p className="muted">{t.loginBody}</p><a className="moe-button" href={loginPath(location.search)} target={embedded ? '_top' : undefined}>{t.signIn} <span aria-hidden="true">↗</span></a></section>}

@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { ApiError, continuation, loginPath, mutate, request } from './api';
-import { errorMessage, periodDate } from './App';
+import { AuthRecovery, authRecoveryCode, errorMessage, periodDate } from './App';
 import { messages, persist, preference, resolveLocale } from './i18n';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -33,6 +35,33 @@ describe('same-origin billing client', () => {
 });
 
 describe('integration boundaries', () => {
+  it('allowlists callback errors instead of displaying query-provided messages', () => {
+    expect(authRecoveryCode('?auth_error=login_failed')).toBe('login_failed');
+    expect(authRecoveryCode('?auth_error=login_denied')).toBe('login_denied');
+    expect(authRecoveryCode('?auth_error=untrusted-message')).toBeUndefined();
+    expect(renderToStaticMarkup(createElement(AuthRecovery, { search: '?auth_error=untrusted-message', locale: 'en', authenticated: false, embedded: false }))).toBe('');
+  });
+
+  it('shows an explicit failed-switch notice even when the previous account session remains', () => {
+    const html = renderToStaticMarkup(createElement(AuthRecovery, { search: '?auth_error=login_failed&embedded=1&locale=ja&plan=pro&detail=private', locale: 'zh-CN', authenticated: true, embedded: true }));
+    expect(html).toContain(messages['zh-CN'].loginFailed);
+    expect(html).toContain(messages['zh-CN'].previousSession);
+    expect(html).toContain('role="alert"');
+    expect(html).toContain('target="_top"');
+    expect(html).toContain('locale=ja');
+    expect(html).toContain('plan=pro');
+    expect(html).not.toContain('auth_error');
+    expect(html).not.toContain('private');
+  });
+
+  it('provides localized denied-login recovery without implying a session switch', () => {
+    const html = renderToStaticMarkup(createElement(AuthRecovery, { search: '?auth_error=login_denied', locale: 'ja', authenticated: false, embedded: false }));
+    expect(html).toContain(messages.ja.loginDenied);
+    expect(html).toContain(messages.ja.loginRetry);
+    expect(html).not.toContain(messages.ja.previousSession);
+    expect(html).toContain('href="/auth/login"');
+  });
+
   it('only forwards known hints to login and leaves return URL validation to the BFF', () => {
     const path = loginPath('?app=notes&plan=pro&return_to=https%3A%2F%2Fnotes.example%2Fdone&token=private');
     const url = new URL(path, 'https://subscribe.example');

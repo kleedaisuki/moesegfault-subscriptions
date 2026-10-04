@@ -67,7 +67,10 @@ async fn route(mut req: Request, env: &Env) -> Result<Response> {
         return login(&req, env, now).await;
     }
     if req.method() == Method::Get && path == "/auth/callback" {
-        return callback(&req, env, now).await;
+        return match callback(&req, env, now).await {
+            Ok(response) => Ok(response),
+            Err(_) => login_failure(env, None, None, "login_failed"),
+        };
     }
     if req.method() == Method::Get && path == "/api/catalog" {
         return proxy(&mut req, env, None, "/v1/plans").await;
@@ -220,20 +223,44 @@ async fn login(req: &Request, env: &Env, now: i64) -> Result<Response> {
 async fn callback(req: &Request, env: &Env, now: i64) -> Result<Response> {
     let url = req.url()?;
     let Some(state) = query(&url, "state")? else {
-        return problem(400, "invalid_callback", "Sign in again.");
+        return login_failure(env, None, None, "login_failed");
     };
     let Some(browser) = store::cookie(req, "__Host-subscribe-login")? else {
-        return problem(400, "invalid_callback", "Sign in again.");
+        return login_failure(env, None, None, "login_failed");
     };
     if query(&url, "iss")? != Some(env.var("ISSUER")?.to_string()) {
-        return problem(400, "issuer_mismatch", "Sign in again.");
+        return login_failure(env, None, None, "login_failed");
     }
     let Some(tx) = store::consume(env, &state, &browser, now).await? else {
-        return problem(400, "invalid_callback", "Sign in again.");
+        return login_failure(env, None, None, "login_failed");
     };
     if query(&url, "error")?.is_some() {
-        return problem(400, "login_denied", "Sign in was not completed.");
+        return login_failure(
+            env,
+            Some(&tx.local_path),
+            tx.return_to.as_deref(),
+            "login_denied",
+        );
     }
+    match finish_callback(req, env, now, &tx).await {
+        Ok(response) if response.status_code() < 400 => Ok(response),
+        _ => login_failure(
+            env,
+            Some(&tx.local_path),
+            tx.return_to.as_deref(),
+            "login_failed",
+        ),
+    }
+}
+
+/// Complete a consumed transaction; failures are converted to a safe product-page recovery.
+async fn finish_callback(
+    req: &Request,
+    env: &Env,
+    now: i64,
+    tx: &store::Login,
+) -> Result<Response> {
+    let url = req.url()?;
     let Some(code) = query(&url, "code")? else {
         return problem(400, "invalid_callback", "Sign in again.");
     };
@@ -243,7 +270,7 @@ async fn callback(req: &Request, env: &Env, now: i64) -> Result<Response> {
         issuer: discovery.issuer,
         audiences: vec![env.var("CLIENT_ID")?.to_string()],
         token_use: "id".into(),
-        nonce: Some(tx.nonce),
+        nonce: Some(tx.nonce.clone()),
         required_scope: None,
     };
     let Ok(principal) = verify_token(&tokens.id_token, env, &policy).await else {
@@ -276,7 +303,7 @@ async fn callback(req: &Request, env: &Env, now: i64) -> Result<Response> {
         .map(JsValue::from_str)
         .unwrap_or(JsValue::NULL);
     env.d1("SESSIONS")?.prepare("INSERT INTO subscribe_sessions(session_hash,subject,name,access_token,csrf,return_to,expires_at) VALUES(?1,?2,?3,?4,?5,?6,?7)")
-        .bind(&[crypto::hash(&id).into(),principal.subject.into(),name,tokens.access_token.into(),csrf.into(),tx.return_to.map(JsValue::from).unwrap_or(JsValue::NULL),JsValue::from_f64(expires as f64)])?.run().await?;
+        .bind(&[crypto::hash(&id).into(),principal.subject.into(),name,tokens.access_token.into(),csrf.into(),tx.return_to.as_deref().map(JsValue::from_str).unwrap_or(JsValue::NULL),JsValue::from_f64(expires as f64)])?.run().await?;
     // Reauthentication replaces the browser's prior session rather than leaving a live orphan.
     if let Some(old) = store::cookie(req, "__Host-subscribe-session")? {
         env.d1("SESSIONS")?
@@ -294,6 +321,55 @@ async fn callback(req: &Request, env: &Env, now: i64) -> Result<Response> {
         "__Host-subscribe-login=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Lax",
     )?;
     Ok(response)
+}
+
+/// Return only server-chosen failure categories and previously validated context to the UI.
+fn login_failure(
+    env: &Env,
+    path: Option<&str>,
+    return_to: Option<&str>,
+    category: &str,
+) -> Result<Response> {
+    let app = env.var("APP_ORIGIN")?.to_string();
+    let allowlist: Vec<String> =
+        serde_json::from_str(&env.var("RETURN_URL_ALLOWLIST")?.to_string())?;
+    let location = recovery_location(&app, path, return_to, &allowlist, category)?;
+    let mut response = redirect(&location)?;
+    response.headers_mut().append(
+        "Set-Cookie",
+        "__Host-subscribe-login=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Lax",
+    )?;
+    Ok(response)
+}
+
+/// Build a same-origin recovery URL without reflecting any OAuth response parameters.
+fn recovery_location(
+    app: &str,
+    path: Option<&str>,
+    return_to: Option<&str>,
+    allowlist: &[String],
+    category: &str,
+) -> Result<String> {
+    let path = path.filter(|path| policy::local_path(path)).unwrap_or("/");
+    let mut destination = url::Url::parse(&format!("{app}{path}"))?;
+    if !matches!(destination.path(), "/" | "/account") {
+        destination.set_path("/");
+        destination.set_query(None);
+    }
+    let category = if category == "login_denied" {
+        "login_denied"
+    } else {
+        "login_failed"
+    };
+    destination
+        .query_pairs_mut()
+        .append_pair("auth_error", category);
+    if let Some(value) = return_to.filter(|value| policy::return_allowed(value, allowlist)) {
+        destination
+            .query_pairs_mut()
+            .append_pair("return_to", value);
+    }
+    Ok(destination.into())
 }
 
 /// A session never outlives either verified credential or the application's 30-minute bound.
@@ -449,5 +525,44 @@ mod tests {
         assert!(!csrf_matches(None, app, "session-a", "session-a"));
         assert!(!csrf_matches(Some(app), app, "session-b", "session-a"));
         assert!(!csrf_matches(Some(app), app, "", ""));
+    }
+
+    #[test]
+    fn recovery_keeps_only_same_origin_path_and_registered_continuation() {
+        let app = "https://subscribe.example";
+        let allowed: Vec<String> = vec!["https://account.example/subscriptions".into()];
+        let recovered = recovery_location(
+            app,
+            Some("/account?locale=ja&plan=basic"),
+            Some(&allowed[0]),
+            &allowed,
+            "login_denied",
+        )
+        .unwrap();
+        let url = url::Url::parse(&recovered).unwrap();
+        assert_eq!(url.origin().ascii_serialization(), app);
+        assert_eq!(url.path(), "/account");
+        assert_eq!(query(&url, "locale").unwrap().as_deref(), Some("ja"));
+        assert_eq!(query(&url, "plan").unwrap().as_deref(), Some("basic"));
+        assert_eq!(
+            query(&url, "auth_error").unwrap().as_deref(),
+            Some("login_denied")
+        );
+        assert_eq!(
+            query(&url, "return_to").unwrap().as_deref(),
+            Some(allowed[0].as_str())
+        );
+        let unsafe_url = recovery_location(
+            app,
+            Some("//evil.test"),
+            Some("https://evil.test"),
+            &allowed,
+            "untrusted-error",
+        )
+        .unwrap();
+        assert_eq!(
+            unsafe_url,
+            "https://subscribe.example/?auth_error=login_failed"
+        );
     }
 }
