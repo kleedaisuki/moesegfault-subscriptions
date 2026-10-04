@@ -76,8 +76,10 @@ function SubscriptionList({ subscriptions, plans, locale }: { subscriptions: Sub
   })}</div>;
 }
 
-/** Keep failed network retries on the same idempotency key until code input changes. */
-function ActivationForm({ session, locale, onActivated, onAuthenticationFailure }: { session: Session; locale: Locale; onActivated: () => Promise<void>; onAuthenticationFailure: (error: unknown) => void }) {
+/** Keep failed retries on the same idempotency key until code input changes.
+ * An accepted return link is durable navigation, not evidence of a completed activation.
+ */
+export function ActivationForm({ session, locale, onActivated, onAuthenticationFailure }: { session: Session; locale: Locale; onActivated: () => Promise<void>; onAuthenticationFailure: (error: unknown) => void }) {
   const t = messages[locale];
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
@@ -108,7 +110,7 @@ function ActivationForm({ session, locale, onActivated, onAuthenticationFailure 
       <p id="code-hint" className="muted hint">{t.codeHint}</p>
     </form>
     <Notice error={error} success={success ? t.activated : undefined} locale={locale} />
-    {success && continuation(session) && <a className="moe-button" href={continuation(session)}>{t.continue} <span aria-hidden="true">↗</span></a>}
+    {continuation(session) && <a className="moe-button" href={continuation(session)}>{t.continue} <span aria-hidden="true">↗</span></a>}
   </section>;
 }
 

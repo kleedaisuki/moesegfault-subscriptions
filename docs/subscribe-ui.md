@@ -89,3 +89,19 @@ JavaScript bundle is approximately 214 kB (68 kB gzip), and product CSS is 9.4 k
 (2.6 kB gzip), plus the three pinned platform CSS assets. No local browser fixture
 was presented as staging acceptance; the deployment's actual browser validation
 remains the integration gate.
+
+## Durable application return navigation
+
+The actual fresh-user staging flow completed signup, activation and profile save,
+but reloading the portal hid the application return link because its visibility
+depended on the form's transient activation-success state. The link is navigation,
+not a claim of payment or entitlement: it now remains visible whenever the server
+session supplies an accepted continuation, independent of local success state.
+The requesting application must still check Billing itself. The existing 401
+boundary removes the session and continuation; the embedded viewer is unchanged.
+
+Two server-rendered frontend regression cases cover fresh/reloaded form rendering
+without a success message and removal of the link after session clearing. The
+focused suite passed twenty tests, TypeScript passed, and the production build
+completed in approximately 100 ms. No backend, authentication, scope or provider
+lifetime changed.

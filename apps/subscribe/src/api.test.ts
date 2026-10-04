@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ApiError, continuation, loginPath, mutate, request } from './api';
-import { AuthRecovery, authenticationStateAfterFailure, authRecoveryCode, errorMessage, periodDate } from './App';
+import { ActivationForm, AuthRecovery, authenticationStateAfterFailure, authRecoveryCode, errorMessage, periodDate } from './App';
 import { messages, persist, preference, resolveLocale } from './i18n';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -35,6 +35,23 @@ describe('same-origin billing client', () => {
 });
 
 describe('integration boundaries', () => {
+  it('keeps return navigation on a fresh or reloaded portal without local activation success', () => {
+    const session = { authenticated: true, returnTo: 'https://account.example/subscriptions' };
+    const props = { session, locale: 'en' as const, onActivated: async () => {}, onAuthenticationFailure: () => {} };
+    for (let load = 0; load < 2; load++) {
+      const html = renderToStaticMarkup(createElement(ActivationForm, props));
+      expect(html).toContain('href="https://account.example/subscriptions"');
+      expect(html).toContain(messages.en.continue);
+      expect(html).not.toContain(messages.en.activated);
+    }
+  });
+
+  it('removes return navigation when a 401 clears session context', () => {
+    const state = authenticationStateAfterFailure(new ApiError(401, 'session_expired'), { session: { authenticated: true, returnTo: 'https://account.example/subscriptions' } });
+    const html = renderToStaticMarkup(createElement(ActivationForm, { session: state.session!, locale: 'en', onActivated: async () => {}, onAuthenticationFailure: () => {} }));
+    expect(html).not.toContain('href="https://account.example/subscriptions"');
+  });
+
   it('clears the previous authenticated identity and billing view on any API 401', () => {
     const state = { session: { authenticated: true, csrfToken: 'old-token', user: { sub: 'old-account' } }, billing: { account: { id: 'old-billing' }, subscriptions: [{ id: 'old-subscription' }] } };
     const recovered = authenticationStateAfterFailure(new ApiError(401, 'session_expired'), state as Parameters<typeof authenticationStateAfterFailure>[1]);
