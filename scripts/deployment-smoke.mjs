@@ -11,17 +11,19 @@ const endpoints = {
   subscribe: 'https://subscribe-staging.moesegfault.dev',
 };
 
-/** Retry DNS propagation and edge rollout only, at most three attempts per request. */
+/** Bound initial-domain DNS propagation and edge rollout retries to at most 90 seconds. */
 async function request(url, init = {}) {
   let failure;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  const deadline = Date.now() + 90_000;
+  for (let attempt = 0; attempt < 10 && Date.now() < deadline; attempt += 1) {
     try {
-      const response = await fetch(url, { redirect: 'manual', ...init, signal: AbortSignal.timeout(8_000) });
+      const timeout = Math.max(1, Math.min(8_000, deadline - Date.now()));
+      const response = await fetch(url, { redirect: 'manual', ...init, signal: AbortSignal.timeout(timeout) });
       if (response.status >= 500) throw new Error(`HTTP ${response.status} at ${url}`);
       return response;
     } catch (error) {
       failure = error;
-      if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 2_000));
+      if (attempt < 9 && Date.now() + 8_000 < deadline) await new Promise((resolve) => setTimeout(resolve, 5_000));
     }
   }
   throw failure;
