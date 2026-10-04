@@ -10,7 +10,7 @@ The current Identity contract uses pairwise subjects and fixes access-token audi
 
 ## Small lifecycle deliberately chosen
 
-1. `/auth/login` stores a ten-minute server-side transaction containing PKCE verifier, random nonce/state and an allowlisted continuation. A separate host-only transaction cookie binds the callback to the initiating browser.
+1. `/auth/login` stores a thirty-minute server-side transaction containing PKCE verifier, random nonce/state and an allowlisted continuation. A separate host-only transaction cookie has the same bounded deadline and binds the callback to the initiating browser.
 2. Callback consumes the transaction once, requires exact authorization-response issuer and state, exchanges the code using a fresh `private_key_jwt`, and validates the ID token and access token before creating a local session.
 3. A random host-only `Secure; HttpOnly; SameSite=Lax` cookie refers to server-side session data. Session expiry cannot exceed its bearer token's expiry.
 4. No `offline_access` is requested. This removes rotating refresh races from the initial product rather than introducing special-case recovery. A returning user starts SSO again after expiry. Adding durable refresh later requires per-session serialization and atomic rotation, not a periodic frontend token refresh.
@@ -85,3 +85,11 @@ That run exposed a useful UX defect: the successful callback had retained `retur
 The React application treats an HTTP 401 from any protected operation as a centralized session-expiry boundary: discard local authenticated state and loaded personal Billing content, remove privileged forms, and offer explicit sign-in with the retained application context. Other failures such as CSRF 403 or profile validation do not silently replace the user's account or initiate automatic OAuth loops. Provider TTL and no-refresh policy remain unchanged.
 
 The focused frontend expiry changes passed eighteen tests in approximately 312 ms plus TypeScript and production build checks; the embedded Account view uses the same recovery boundary. No development server or refresh-token feature was added.
+
+## Registration-aware preauthentication deadline
+
+Identity's approved registration flow can legitimately consume an initial five-minute pending-email interval, a renewed ten-minute email challenge and a ten-minute proof interval: twenty-five minutes in total. A relying party's earlier ten-minute transaction/cookie deadline incorrectly interrupted this valid authentication flow.
+
+The BFF now uses the single `PREAUTH_TTL_SECONDS = 30 * 60` constant for both its server-side login transaction deadline and browser-bound login cookie. The extra five minutes provides bounded navigation/processing margin. Transactions remain single-use, browser-bound and cleaned up after expiry; successful and failed callbacks clear their cookie. This extends only unauthenticated registration opportunity, not authenticated privilege. The actual provider access-token lifetime (300 seconds), local session cap, nonce/issuer/audience checks and no-refresh/no-`offline_access` policy are unchanged.
+
+Focused validation passed nine Rust tests (including registration budget/cookie equality and the unchanged token-limited session expiry) in 1.24 seconds incremental compilation, plus WASM checking in 0.47 seconds. No unrelated frontend suite or release build was run for this constant-only behavioral change.

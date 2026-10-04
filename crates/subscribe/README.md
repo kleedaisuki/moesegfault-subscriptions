@@ -41,7 +41,9 @@ responses remain intact, including `x-moesegfault-correlation-id`.
 ## Session lifecycle and compatibility
 
 Secure HttpOnly host-only SameSite=Lax cookies contain 256-bit opaque entropy;
-only SHA-256 cookie digests index D1 records. Login state expires after ten minutes.
+only SHA-256 cookie digests index D1 records. Login state and its browser-bound cookie
+expire together after thirty minutes, covering Identity's bounded email-registration
+flow without extending any authenticated token or session lifetime.
 Sessions expire at the earliest of ID-token expiry, access-token expiry, and
 30 minutes. No `offline_access`, refresh token, or token rotation is implemented.
 Reconnect uses `/auth/login?path=/account`; authentication replaces any previous

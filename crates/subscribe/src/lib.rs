@@ -10,6 +10,10 @@ use subtle::ConstantTimeEq;
 use wasm_bindgen::JsValue;
 use worker::*;
 
+/// Covers bounded Identity registration: initial mail request, renewed challenge and proof.
+/// This is an unauthenticated transaction deadline, never an access-token/session lifetime.
+const PREAUTH_TTL_SECONDS: i64 = 30 * 60;
+
 /// Cloudflare entrypoint. Internal failures deliberately reveal no credentials or provider body.
 #[event(fetch)]
 pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
@@ -193,7 +197,7 @@ async fn login(req: &Request, env: &Env, now: i64) -> Result<Response> {
         db.prepare("DELETE FROM subscribe_login WHERE expires_at<=?1").bind(&[JsValue::from_f64(now as f64)])?,
         db.prepare("DELETE FROM subscribe_sessions WHERE expires_at<=?1").bind(&[JsValue::from_f64(now as f64)])?,
         db.prepare("INSERT INTO subscribe_login(state_hash,browser_hash,nonce,verifier,return_to,local_path,expires_at) VALUES(?1,?2,?3,?4,?5,?6,?7)")
-            .bind(&[crypto::hash(&state).into(),crypto::hash(&browser).into(),nonce.clone().into(),verifier.clone().into(),return_to.map(JsValue::from).unwrap_or(JsValue::NULL),local_path.into(),JsValue::from_f64((now+600) as f64)])?,
+            .bind(&[crypto::hash(&state).into(),crypto::hash(&browser).into(),nonce.clone().into(),verifier.clone().into(),return_to.map(JsValue::from).unwrap_or(JsValue::NULL),local_path.into(),JsValue::from_f64((now+PREAUTH_TTL_SECONDS) as f64)])?,
     ]).await?;
     let mut authorize = url::Url::parse(&discovery.authorization_endpoint)?;
     authorize.query_pairs_mut().extend_pairs([
@@ -210,12 +214,9 @@ async fn login(req: &Request, env: &Env, now: i64) -> Result<Response> {
         ("code_challenge_method", "S256"),
     ]);
     let mut response = redirect(authorize.as_str())?;
-    response.headers_mut().append(
-        "Set-Cookie",
-        &format!(
-            "__Host-subscribe-login={browser}; Path=/; Max-Age=600; Secure; HttpOnly; SameSite=Lax"
-        ),
-    )?;
+    response
+        .headers_mut()
+        .append("Set-Cookie", &login_cookie(&browser, PREAUTH_TTL_SECONDS))?;
     Ok(response)
 }
 
@@ -324,10 +325,9 @@ async fn finish_callback(
     response
         .headers_mut()
         .append("Set-Cookie", &session_cookie(&id, expires - now))?;
-    response.headers_mut().append(
-        "Set-Cookie",
-        "__Host-subscribe-login=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Lax",
-    )?;
+    response
+        .headers_mut()
+        .append("Set-Cookie", &login_cookie("", 0))?;
     Ok(response)
 }
 
@@ -343,10 +343,9 @@ fn login_failure(
         serde_json::from_str(&env.var("RETURN_URL_ALLOWLIST")?.to_string())?;
     let location = recovery_location(&app, path, return_to, &allowlist, category)?;
     let mut response = redirect(&location)?;
-    response.headers_mut().append(
-        "Set-Cookie",
-        "__Host-subscribe-login=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Lax",
-    )?;
+    response
+        .headers_mut()
+        .append("Set-Cookie", &login_cookie("", 0))?;
     Ok(response)
 }
 
@@ -495,6 +494,11 @@ fn query(url: &url::Url, key: &str) -> Result<Option<String>> {
 }
 
 /// Host-only cookies never expose token values or permit parent-domain overrides.
+fn login_cookie(id: &str, age: i64) -> String {
+    format!("__Host-subscribe-login={id}; Path=/; Max-Age={age}; Secure; HttpOnly; SameSite=Lax")
+}
+
+/// Authenticated session cookies retain their independently token-bounded expiry.
 fn session_cookie(id: &str, age: i64) -> String {
     format!("__Host-subscribe-session={id}; Path=/; Max-Age={age}; Secure; HttpOnly; SameSite=Lax")
 }
@@ -526,6 +530,14 @@ mod tests {
         assert_eq!(session_expiry(200, 300, 100), 200);
         assert_eq!(session_expiry(300, 200, 100), 200);
         assert_eq!(session_expiry(9000, 9000, 100), 1900);
+    }
+    #[test]
+    fn preauth_deadline_covers_registration_without_extending_authenticated_tokens() {
+        assert_eq!(PREAUTH_TTL_SECONDS, 1800);
+        assert!(PREAUTH_TTL_SECONDS >= 5 * 60 + 10 * 60 + 10 * 60);
+        assert!(login_cookie("browser-bound-id", PREAUTH_TTL_SECONDS).contains("Max-Age=1800"));
+        assert!(login_cookie("", 0).contains("Max-Age=0"));
+        assert_eq!(session_expiry(400, 400, 100), 400);
     }
     #[test]
     fn rejects_duplicate_callback_parameters() {
