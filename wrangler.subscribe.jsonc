@@ -22,5 +22,5 @@
     "database_id": "8c2435df-3dcd-4bc8-a6ee-9798fa150a96", "migrations_dir": "migrations/subscribe"
   }],
   "services": [{ "binding": "BILLING", "service": "moesegfault-billing-staging" }],
-  "observability": { "enabled": true, "logs": { "enabled": true, "head_sampling_rate": 1 } }
+  "observability": { "enabled": true, "redact_query_string": true, "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false } }
 }

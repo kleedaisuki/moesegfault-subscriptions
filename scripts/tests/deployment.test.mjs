@@ -18,6 +18,9 @@ test('staging database and domains cannot point at production', async () => {
     assert.deepEqual(settings.routes, [{ pattern: `${service}-staging.moesegfault.dev`, custom_domain: true }]);
     assert.equal(settings.d1_databases[0].database_name, `moesegfault-${service}-staging`);
     assert.equal(settings.env, undefined, 'no implicit production configuration exists');
+    assert.equal(settings.observability.logs.enabled, true);
+    assert.equal(settings.observability.logs.invocation_logs, false, 'raw request URLs must not enter persisted invocation logs');
+    assert.equal(settings.observability.redact_query_string, true, 'custom log metadata must not retain callback query capabilities');
   }
   assert.notEqual((await config('billing')).d1_databases[0].database_id, (await config('subscribe')).d1_databases[0].database_id);
 });

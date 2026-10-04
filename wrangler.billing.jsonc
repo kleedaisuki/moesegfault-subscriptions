@@ -19,5 +19,5 @@
     "database_id": "47022fe7-0e14-4bbb-a52a-c59358b938b1", "migrations_dir": "migrations/billing"
   }],
   "send_email": [{ "name": "EMAIL", "allowed_sender_addresses": ["subscribe@moesegfault.dev"] }],
-  "observability": { "enabled": true, "logs": { "enabled": true, "head_sampling_rate": 1 } }
+  "observability": { "enabled": true, "redact_query_string": true, "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false } }
 }
