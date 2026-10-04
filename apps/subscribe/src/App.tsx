@@ -6,6 +6,13 @@ import './styles.css';
 /** A profile never borrows an unverified email from OIDC claims. */
 const emptyProfile: BillingProfile = { display_name: '', email: '', country: '', address_line1: '', address_line2: '', city: '', postal_code: '', tax_id: '' };
 
+/** A 401 invalidates the local view; a CSRF 403 or network failure does not. */
+export function authenticationStateAfterFailure(error: unknown, state: { session?: Session; billing?: Billing }): { session?: Session; billing?: Billing } {
+  return error instanceof ApiError && error.status === 401
+    ? { session: { authenticated: false }, billing: undefined }
+    : state;
+}
+
 /** Only stable, allowlisted callback outcomes may select recovery copy. */
 export function authRecoveryCode(search: string): 'login_denied' | 'login_failed' | undefined {
   const code = new URLSearchParams(search).get('auth_error');
@@ -28,7 +35,8 @@ export function AuthRecovery({ search, locale, authenticated, embedded }: { sear
 export function errorMessage(error: unknown, locale: Locale): string {
   const t = messages[locale];
   if (!(error instanceof ApiError)) return t.networkError;
-  if (error.status === 401 || error.status === 403) return t.sessionError;
+  if (error.status === 401) return t.sessionError;
+  if (error.status === 403) return error.code.includes('csrf') ? t.csrfError : t.genericError;
   if (error.code === 'plan_conflict') return t.planConflict;
   if (error.status === 409) return t.conflictError;
   if (error.code.includes('code') || error.code.includes('activation')) return t.codeError;
@@ -48,7 +56,7 @@ function Notice({ error, success, locale }: { error?: unknown; success?: string;
   if (!error && !success) return null;
   return <div className={`notice ${error ? 'notice-error' : 'notice-success'}`} role={error ? 'alert' : 'status'}>
     <p>{error ? errorMessage(error, locale) : success}</p>
-    {error instanceof ApiError && (error.status === 401 || error.status === 403) && <a href={loginPath(location.search)} target={new URLSearchParams(location.search).get('embedded') === '1' ? '_top' : undefined}>{messages[locale].signIn}</a>}
+    {error instanceof ApiError && error.status === 401 && <a href={loginPath(location.search)} target={new URLSearchParams(location.search).get('embedded') === '1' ? '_top' : undefined}>{messages[locale].signIn}</a>}
     {error instanceof ApiError && error.correlationId && <small>{messages[locale].reference}: <code>{error.correlationId}</code></small>}
   </div>;
 }
@@ -69,7 +77,7 @@ function SubscriptionList({ subscriptions, plans, locale }: { subscriptions: Sub
 }
 
 /** Keep failed network retries on the same idempotency key until code input changes. */
-function ActivationForm({ session, locale, onActivated }: { session: Session; locale: Locale; onActivated: () => Promise<void> }) {
+function ActivationForm({ session, locale, onActivated, onAuthenticationFailure }: { session: Session; locale: Locale; onActivated: () => Promise<void>; onAuthenticationFailure: (error: unknown) => void }) {
   const t = messages[locale];
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
@@ -88,6 +96,7 @@ function ActivationForm({ session, locale, onActivated }: { session: Session; lo
       await onActivated();
     } catch (failure) {
       setError(failure);
+      onAuthenticationFailure(failure);
       if (failure instanceof ApiError && failure.status < 500) attempt.current = undefined;
     } finally { setBusy(false); }
   }
@@ -104,7 +113,7 @@ function ActivationForm({ session, locale, onActivated }: { session: Session; lo
 }
 
 /** Only explicitly entered billing details are sent to the service. */
-function ProfileForm({ initial, session, locale }: { initial: BillingProfile; session: Session; locale: Locale }) {
+function ProfileForm({ initial, session, locale, onAuthenticationFailure }: { initial: BillingProfile; session: Session; locale: Locale; onAuthenticationFailure: (error: unknown) => void }) {
   const t = messages[locale];
   const [profile, setProfile] = useState<BillingProfile>(() => Object.fromEntries(Object.keys(emptyProfile).map(key => [key, initial[key as keyof BillingProfile] ?? ''])) as unknown as BillingProfile);
   const [busy, setBusy] = useState(false);
@@ -115,7 +124,7 @@ function ProfileForm({ initial, session, locale }: { initial: BillingProfile; se
     if (busy) return;
     setBusy(true); setError(undefined); setSaved(false);
     try { await mutate('/api/profile', 'PUT', session.csrfToken ?? '', profile); setSaved(true); }
-    catch (failure) { setError(failure); }
+    catch (failure) { setError(failure); onAuthenticationFailure(failure); }
     finally { setBusy(false); }
   }
   const autocomplete: Partial<Record<keyof BillingProfile, string>> = { display_name: 'organization', email: 'email', country: 'country', address_line1: 'address-line1', address_line2: 'address-line2', city: 'address-level2', postal_code: 'postal-code' };
@@ -152,9 +161,16 @@ export default function App() {
   const t = messages[locale];
   useEffect(() => { document.documentElement.lang = locale; document.title = `${t.subscriptions} · moeSegFault`; persist('subscribe-locale', locale); }, [locale, t]);
   useEffect(() => { document.documentElement.dataset.moeTheme = theme; persist('moe-theme', theme); }, [theme]);
+  function onAuthenticationFailure(error: unknown) {
+    const current = { session, billing };
+    const next = authenticationStateAfterFailure(error, current);
+    if (next === current) return;
+    setSession(next.session); setBilling(next.billing);
+    setLoadError(undefined); setActionError(error);
+  }
   async function refreshBilling() {
     try { setBilling(await request<Billing>('/api/billing')); setLoadError(undefined); }
-    catch (error) { setLoadError(error); }
+    catch (error) { setLoadError(error); onAuthenticationFailure(error); }
   }
   async function load() {
     setLoading(true); setLoadError(undefined);
@@ -163,20 +179,21 @@ export default function App() {
       setSession(nextSession); setPlans(catalog.plans);
       if (nextSession.authenticated) setBilling(await request<Billing>('/api/billing'));
       else setBilling(undefined);
-    } catch (error) { setLoadError(error); }
+    } catch (error) { setLoadError(error); onAuthenticationFailure(error); }
     finally { setLoading(false); }
   }
   useEffect(() => { void load(); }, []);
   async function logout() {
     setLogoutBusy(true); setActionError(undefined);
     try { await mutate('/auth/logout', 'POST', session?.csrfToken ?? ''); setSession({ authenticated: false }); setBilling(undefined); }
-    catch (error) { setActionError(error); }
+    catch (error) { setActionError(error); onAuthenticationFailure(error); }
     finally { setLogoutBusy(false); }
   }
   const requestedPlan = query.get('plan');
   const viewerName = session?.user?.name || session?.user?.sub;
   const content = <>
     <AuthRecovery search={location.search} locale={locale} authenticated={session?.authenticated ?? false} embedded={embedded} />
+    <Notice error={actionError} locale={locale} />
     {loading && <div className="panel loading" role="status"><span className="loading-dot" aria-hidden="true" />{t.loading}</div>}
     {!loading && loadError && <div className="panel"><Notice error={loadError} locale={locale} /><button className="moe-button" onClick={() => void load()}>{t.retry}</button></div>}
     {!loading && session && !session.authenticated && <section className="panel login-panel"><div className="login-emblem" aria-hidden="true">◇</div><h2>{t.loginTitle}</h2><p className="muted">{t.loginBody}</p><a className="moe-button" href={loginPath(location.search)} target={embedded ? '_top' : undefined}>{t.signIn} <span aria-hidden="true">↗</span></a></section>}
@@ -186,8 +203,8 @@ export default function App() {
         {billing && <SubscriptionList subscriptions={billing.subscriptions} plans={plans} locale={locale} />}
         {embedded && <div className="embed-actions"><a className="moe-button" href="/" target="_top">{t.manage} <span aria-hidden="true">↗</span></a><a href="/account?reconnect=1" target="_top">{t.reconnect}</a></div>}
       </section>
-      {!embedded && <ActivationForm session={session} locale={locale} onActivated={refreshBilling} />}
-      {!embedded && billing && <ProfileForm initial={billing.account.profile} session={session} locale={locale} />}
+      {!embedded && <ActivationForm session={session} locale={locale} onActivated={refreshBilling} onAuthenticationFailure={onAuthenticationFailure} />}
+      {!embedded && billing && <ProfileForm initial={billing.account.profile} session={session} locale={locale} onAuthenticationFailure={onAuthenticationFailure} />}
     </>}
   </>;
   if (embedded) return <main className="embed-shell"><h1 className="sr-only">{t.accountTitle}</h1>{content}</main>;
@@ -197,7 +214,6 @@ export default function App() {
       <div className="header-controls"><label className="sr-only" htmlFor="language">{t.language}</label><select id="language" value={locale} onChange={event => setLocale(event.target.value as Locale)}><option value="zh-CN">简体中文</option><option value="ja">日本語</option><option value="en">English</option></select><label className="sr-only" htmlFor="theme">{t.theme}</label><select id="theme" value={theme} onChange={event => setTheme(event.target.value)}><option value="auto">◐ {t.auto}</option><option value="light">☀ {t.light}</option><option value="dark">☾ {t.dark}</option></select>{session?.authenticated && <button className="text-button" disabled={logoutBusy} onClick={() => void logout()}>{t.signOut}</button>}</div>
     </header>
     <main id="main"><section className="hero"><div className="hero-copy"><p className="eyebrow">moeSegFault / Subscribe</p><h1>{t.title}</h1><p className="hero-description">{t.subtitle}</p><ol className="steps" aria-label={t.steps}><li><span>1</span>{t.step1}</li><li><span>2</span>{t.step2}</li><li><span>3</span>{t.step3}</li></ol></div><div className="hero-art" aria-hidden="true"><div className="orb orb-one" /><div className="orb orb-two" /><span className="art-star star-one">✦</span><span className="art-star star-two">✧</span><div className="membership-card"><span>moeSegFault</span><img className="card-symbol" src="/style/v0.1.2/icons/brand.svg" alt="" /><div className="card-lines"><i /><i /></div><small>MEMBERSHIP</small></div></div></section>
-      <Notice error={actionError} locale={locale} />
       <div className="content-grid"><div className="main-column">{content}</div><aside className="catalog" aria-labelledby="catalog-title"><div className="catalog-heading"><p className="eyebrow">PLANS</p><h2 id="catalog-title">{t.catalog}</h2></div>{!loading && !plans.filter(plan => plan.active).length && <p className="muted">{t.noPlans}</p>}{plans.filter(plan => plan.active).map(plan => <article key={plan.id} className={`plan-card ${plan.id === requestedPlan ? 'plan-requested' : ''}`}><p className="eyebrow">{plan.product_id}</p><h3>{plan.name[locale] || plan.name.en}</h3><p className="muted">{plan.description[locale] || plan.description.en}</p><div className="plan-duration"><strong>{plan.duration_days}</strong> {t.days}</div>{plan.id === requestedPlan && <span className="status-pill">{t.selected}</span>}<a className="plan-link" href={session?.authenticated ? '#activate' : loginPath(location.search)}>{session?.authenticated ? t.activate : t.signIn}<span aria-hidden="true">↗</span></a></article>)}</aside></div>
     </main>
     <footer className="site-footer"><span>© {new Date().getFullYear()} moeSegFault</span><a href="mailto:subscribe@moesegfault.dev">{t.support} <span aria-hidden="true">↗</span></a></footer>

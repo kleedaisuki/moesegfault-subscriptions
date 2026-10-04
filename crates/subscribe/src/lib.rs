@@ -312,7 +312,15 @@ async fn finish_callback(
             .run()
             .await?;
     }
-    let mut response = redirect(&format!("{}{}", env.var("APP_ORIGIN")?, tx.local_path))?;
+    let allowlist: Vec<String> =
+        serde_json::from_str(&env.var("RETURN_URL_ALLOWLIST")?.to_string())?;
+    let location = portal_location(
+        &env.var("APP_ORIGIN")?.to_string(),
+        Some(&tx.local_path),
+        tx.return_to.as_deref(),
+        &allowlist,
+    )?;
+    let mut response = redirect(location.as_str())?;
     response
         .headers_mut()
         .append("Set-Cookie", &session_cookie(&id, expires - now))?;
@@ -350,12 +358,7 @@ fn recovery_location(
     allowlist: &[String],
     category: &str,
 ) -> Result<String> {
-    let path = path.filter(|path| policy::local_path(path)).unwrap_or("/");
-    let mut destination = url::Url::parse(&format!("{app}{path}"))?;
-    if !matches!(destination.path(), "/" | "/account") {
-        destination.set_path("/");
-        destination.set_query(None);
-    }
+    let mut destination = portal_location(app, path, return_to, allowlist)?;
     let category = if category == "login_denied" {
         "login_denied"
     } else {
@@ -364,12 +367,29 @@ fn recovery_location(
     destination
         .query_pairs_mut()
         .append_pair("auth_error", category);
+    Ok(destination.into())
+}
+
+/// Preserve trusted application context across successful login and later session expiry.
+/// OAuth credential/response fields are never copied into the product URL.
+fn portal_location(
+    app: &str,
+    path: Option<&str>,
+    return_to: Option<&str>,
+    allowlist: &[String],
+) -> Result<url::Url> {
+    let path = path.filter(|path| policy::local_path(path)).unwrap_or("/");
+    let mut destination = url::Url::parse(&format!("{app}{path}"))?;
+    if !matches!(destination.path(), "/" | "/account") {
+        destination.set_path("/");
+        destination.set_query(None);
+    }
     if let Some(value) = return_to.filter(|value| policy::return_allowed(value, allowlist)) {
         destination
             .query_pairs_mut()
             .append_pair("return_to", value);
     }
-    Ok(destination.into())
+    Ok(destination)
 }
 
 /// A session never outlives either verified credential or the application's 30-minute bound.
@@ -564,5 +584,40 @@ mod tests {
             unsafe_url,
             "https://subscribe.example/?auth_error=login_failed"
         );
+    }
+
+    #[test]
+    fn successful_portal_keeps_safe_continuation_without_oauth_fields() {
+        let allowed: Vec<String> = vec!["https://account.example/subscriptions".into()];
+        let location = portal_location(
+            "https://subscribe.example",
+            Some("/?app=demo&plan=basic&locale=zh-CN"),
+            Some(&allowed[0]),
+            &allowed,
+        )
+        .unwrap();
+        assert_eq!(
+            query(&location, "return_to").unwrap().as_deref(),
+            Some(allowed[0].as_str())
+        );
+        assert_eq!(query(&location, "app").unwrap().as_deref(), Some("demo"));
+        for key in [
+            "auth_error",
+            "code",
+            "state",
+            "nonce",
+            "id_token",
+            "access_token",
+        ] {
+            assert_eq!(query(&location, key).unwrap(), None);
+        }
+        let unregistered = portal_location(
+            "https://subscribe.example",
+            Some("/account"),
+            Some("https://evil.example"),
+            &allowed,
+        )
+        .unwrap();
+        assert_eq!(query(&unregistered, "return_to").unwrap(), None);
     }
 }

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ApiError, continuation, loginPath, mutate, request } from './api';
-import { AuthRecovery, authRecoveryCode, errorMessage, periodDate } from './App';
+import { AuthRecovery, authenticationStateAfterFailure, authRecoveryCode, errorMessage, periodDate } from './App';
 import { messages, persist, preference, resolveLocale } from './i18n';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -35,6 +35,22 @@ describe('same-origin billing client', () => {
 });
 
 describe('integration boundaries', () => {
+  it('clears the previous authenticated identity and billing view on any API 401', () => {
+    const state = { session: { authenticated: true, csrfToken: 'old-token', user: { sub: 'old-account' } }, billing: { account: { id: 'old-billing' }, subscriptions: [{ id: 'old-subscription' }] } };
+    const recovered = authenticationStateAfterFailure(new ApiError(401, 'session_expired'), state as Parameters<typeof authenticationStateAfterFailure>[1]);
+    expect(recovered.session).toEqual({ authenticated: false });
+    expect(recovered.billing).toBeUndefined();
+    expect(recovered.session?.user).toBeUndefined();
+    expect(recovered.session?.csrfToken).toBeUndefined();
+  });
+
+  it('does not erase an authenticated view for CSRF 403 or transient network failures', () => {
+    const state = { session: { authenticated: true, user: { sub: 'current-account' } } };
+    expect(authenticationStateAfterFailure(new ApiError(403, 'csrf_invalid'), state)).toBe(state);
+    expect(errorMessage(new ApiError(403, 'csrf_invalid'), 'zh-CN')).toBe(messages['zh-CN'].csrfError);
+    expect(authenticationStateAfterFailure(new TypeError('offline'), state)).toBe(state);
+  });
+
   it('allowlists callback errors instead of displaying query-provided messages', () => {
     expect(authRecoveryCode('?auth_error=login_failed')).toBe('login_failed');
     expect(authRecoveryCode('?auth_error=login_denied')).toBe('login_denied');
