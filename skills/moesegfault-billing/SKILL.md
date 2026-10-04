@@ -17,6 +17,7 @@ Choose the trust boundary first, then read only the relevant reference.
 
 - Identity authenticates people; Billing validates the bearer credential and owns billing data.
 - Map a person by fixed `(issuer, sub)`, never by mutable email or username.
+- Identity subjects are pairwise: independent clients must share a deliberately registered billing subject sector to address the same BillingAccount. Read the consumer reference before adding an audience or changing a sector.
 - The browser calls its same-origin backend. Do not expose bearer tokens, OAuth client secrets, or administrator credentials to React or browser storage.
 - An activation code is a bearer capability. Never put it in a URL, log, analytics event, screenshot, public fixture, or support transcript.
 - Plan registration is deployment configuration. Existing issued codes preserve their granted plan snapshot when the catalog changes.

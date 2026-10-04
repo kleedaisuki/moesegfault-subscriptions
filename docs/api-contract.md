@@ -5,6 +5,17 @@ Identity access tokens from its fixed environment issuer and exact registered
 client IDs configured in `BILLING_AUDIENCES` (JSON array). Tokens remain in the
 Subscribe BFF; React uses only same-origin BFF endpoints and a host-only session.
 
+Billing accounts are keyed by `(issuer, pairwise sub)`. Different Identity subject
+sectors produce different accounts even for the same human. An independently
+registered application that must read Subscribe-issued grants must be deliberately
+registered in the same per-environment billing subject sector as the gateway and
+have its exact client ID allowlisted; adding an audience alone does not join accounts.
+The staging gateway sector is `subscribe-staging.moesegfault.dev`. Do not change a
+deployed sector without an account/subscription migration, or join by email, `pid`,
+or internal claims. If sector sharing or the required delegation is unsupported
+or undesirable, request an explicit Identity contract decision and user approval
+before changing the Identity service. See the [consumer onboarding reference](../skills/moesegfault-billing/references/consumers.md#pairwise-subjects-and-application-onboarding).
+
 ## API
 
 All time fields are integer Unix seconds. Authenticated operations use

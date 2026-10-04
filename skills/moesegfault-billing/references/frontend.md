@@ -10,7 +10,9 @@ Use React with TypeScript, the shared moeSegFault style primitives, English / Ja
 
 ## Account integration
 
-Account's subscription section is a first-party read surface. Its same-origin backend validates the Account session and requests Billing for that authenticated principal; the browser must not receive an administrator token or a reusable OAuth bearer. Integration should not require changing Identity's authentication service contract.
+Account's subscription section is a first-party read surface. The current integration links to or displays the Subscribe-owned viewer, which authenticates through the same registered gateway; Account's cookie is not a Billing credential. The browser must not receive an administrator token or a reusable OAuth bearer.
+
+A future independent Account or application BFF must follow the [consumer subject-sector registration contract](consumers.md#pairwise-subjects-and-application-onboarding) before querying the same subscriptions. The same human's separately authenticated session does not guarantee the same pairwise `sub`. Use deliberately shared per-environment billing sectors and exact audience allowlists, not email or internal-claim joins. A deployed sector change requires migration; an unsupported delegation model requires an approved Identity contract decision, not an authentication-service change made as frontend integration.
 
 Do not infer a subscription from profile completeness or a successful redirect. Fetch the authoritative state after activation and after returning to Account. Handle empty, loading, active, expired, and recoverable-error states without implying a purchase occurred.
 
