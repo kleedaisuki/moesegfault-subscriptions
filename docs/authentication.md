@@ -74,9 +74,23 @@ callback request URLs because their query includes one-use credentials.
 
 The diagnostic classifier has a focused regression test retaining all acceptance
 rules. `cargo +stable check -p billing --target wasm32-unknown-unknown --locked -j 2`
-passed locally using the repository `.cache/cargo-target` directory. The next probe
-is one fresh staging authorization flow and its categorical rejection, followed by
-a concrete consumer repair if warranted; diagnosis alone is not closed-loop success.
+passed locally using the repository `.cache/cargo-target` directory.
+
+The next fresh staging callback emitted `stage=jwks` and
+`category=identity_verification_unavailable`. The concrete defect was metadata
+request construction: workerd rejects `redirect: "error"`, although the public
+Workers Request documentation lists this Fetch Standard value. Its actual runtime
+enum implements only `follow` and `manual`. The BFF already used manual and could
+exchange tokens; the shared verifier used error and failed before metadata fetch.
+A real repository-installed Miniflare/workerd probe reproduced error rejection
+and manual acceptance in 1.7 seconds. The verifier now uses manual mode and keeps
+its exact status-200 requirement, so every 3xx response still fails closed without
+following redirects. No issuer, audience, nonce, scope, or signature check changed.
+`scripts/auth-runtime.test.mjs` runs this regression using workerd and keeps all
+scratch state beneath `.temp`. A fresh staging callback remains the acceptance
+check; the runtime constructor probe is not a substitute for the user workflow.
+
+Runtime source: [workerd HTTP Request redirect enum](https://github.com/cloudflare/workerd/blob/main/src/workerd/api/http.h).
 
 ## References and rationale
 

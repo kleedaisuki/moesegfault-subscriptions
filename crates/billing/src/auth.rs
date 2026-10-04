@@ -500,7 +500,9 @@ fn valid_key(key: &Value) -> bool {
 
 async fn fetch_json(url: &str) -> Result<Value, AuthError> {
     let mut init = RequestInit::new();
-    init.with_redirect(RequestRedirect::Error);
+    // workerd rejects the Fetch Standard's `error` constructor mode. Manual plus the
+    // exact HTTP 200 check below preserves redirect rejection on this runtime.
+    init.with_redirect(RequestRedirect::Manual);
     let request = Request::new_with_init(url, &init).map_err(|_| AuthError::Unavailable)?;
     let mut response = Fetch::Request(request)
         .send()
