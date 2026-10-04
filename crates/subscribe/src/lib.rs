@@ -76,10 +76,14 @@ async fn route(mut req: Request, env: &Env) -> Result<Response> {
         if path == "/account" && query(&url, "reconnect")? == Some("1".into()) {
             return redirect(&format!("{app}/auth/login?path=/account"));
         }
-        return env
+        let response = env
             .get_binding::<Fetcher>("ASSETS")?
             .fetch_request(req)
-            .await;
+            .await?;
+        // Fetched response headers are immutable. workers-rs Headers::clone constructs
+        // new platform Headers, retaining cache metadata without buffering the body.
+        let headers = response.headers().clone();
+        return Ok(response.with_headers(headers));
     }
     let session = store::session(&req, env, now).await?;
     if req.method() == Method::Get && path == "/api/session" {

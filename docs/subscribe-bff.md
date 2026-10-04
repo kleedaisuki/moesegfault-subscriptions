@@ -55,3 +55,11 @@ The useful next validation is one actual staging browser journey from applicatio
 The fixture uses explicit column names so additive display-profile fields cannot silently shift session values. It also verifies the trusted display name readback. The BFF independently passed six native boundary tests and a `wasm32-unknown-unknown` compile check using two Cargo jobs and the shared repository `.cache/cargo-target`. The final staging callback/activation acceptance remains owned by the integrated browser/mail run.
 
 The current Identity signer includes standard `name` and `preferred_username` in ID tokens when `profile` scope is granted. Subscribe reads these only after verifying the exact ID token and stores a bounded optional display name. This is a useful label for the separately authenticated Account iframe; it is never an authorization key and never comes from the self-declared billing profile.
+
+## First staging runtime correction: asset response ownership
+
+The initial staging deployment returned JSON 200 for `/healthz`, `/api/catalog` and `/api/session`, but raw HTTP 500 for `/` and `/index.html`. The difference isolated the failure to the ASSETS passthrough: the entrypoint added security headers to the fetched asset response, whose platform Headers guard is immutable.
+
+The asset boundary now clones its headers and installs that new Headers object on the same owned response before returning it. In worker 0.8.6, `Headers::clone` invokes `web_sys::Headers::new_with_headers`, creating mutable platform headers. `Response::with_headers` replaces only builder headers; body stream, status, encoding and cache metadata are retained without buffering or duplicating the body. This follows [Cloudflare's modify-response practice](https://developers.cloudflare.com/workers/examples/modify-response/).
+
+Focused validation after the correction: formatting passed; WASM cargo check completed in 0.53 seconds; six native boundary tests passed after 2.48 seconds incremental compilation, using two jobs and the existing repository cache. These tests cannot recreate Cloudflare's immutable fetched header guard; final runtime acceptance is a fresh staging `/` and `/index.html` response with HTML content and the environment-paired framing CSP after the hosted rebuild/deploy.
