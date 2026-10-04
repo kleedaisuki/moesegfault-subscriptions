@@ -1,0 +1,121 @@
+# Staging delivery and platform decisions
+
+## Targets and authority
+
+The initial acceptance release is **staging only**. No production environment or
+implicit production Wrangler selector exists in this repository. Billing and
+Subscribe are independent pure-Rust Workers; Subscribe additionally serves React
+assets through the platform's static-assets binding.
+
+| Resource | Pinned staging value |
+| --- | --- |
+| Billing Worker/domain | `moesegfault-billing-staging` / `billing-staging.moesegfault.dev` |
+| Billing D1 | `47022fe7-0e14-4bbb-a52a-c59358b938b1` |
+| Subscribe Worker/domain | `moesegfault-subscribe-staging` / `subscribe-staging.moesegfault.dev` |
+| Subscribe D1 | `8c2435df-3dcd-4bc8-a6ee-9798fa150a96` |
+| Identity issuer | `https://identity-staging.moesegfault.dev` |
+| OIDC confidential client | `subscribe-staging` |
+| Sender | `subscribe@moesegfault.dev` |
+
+Wrangler configs pin bindings, domains, audiences, and the plan catalog. Creating a
+new plan means editing `PLAN_REGISTRY_JSON` with a stable plan/product ID and the
+three localized names/descriptions, then releasing Billing. Never change the
+meaning of an existing plan ID to reinterpret previously granted subscriptions.
+Adding arbitrary new request origins to Identity is not required for an OAuth
+redirect client.
+
+## Efficient release graph
+
+```text
+Rust tests + two sequential WASM builds ─┐
+                                      ├─ Wrangler dry-runs ─ checksummed archive
+React types + unit tests + assets ──────┘                    │
+                                  staging secrets + D1 ── deploy ── smoke
+```
+
+The GitHub Actions workflow caches Cargo registry/target/tool binaries by exact
+Rust/tool version and Cargo lock hash; npm's download cache is keyed by the npm
+lockfile. It does not cache `node_modules`. Builds are hosted, with two Cargo
+threads and bounded job deadlines; no local repeated Rust release builds are
+needed. The package job downloads both independent outputs, verifies Wrangler
+packaging, and uploads one immutable archive with SHA-256 and source revision.
+Deployment downloads that archive and never recompiles. Untrusted pull requests
+receive no deployment secrets. The credentialed job disables dependency-cache
+restore and serializes the staging environment. Main pushes build, verify, and
+deploy **staging only**; a candidate branch may use manual `staging-only` dispatch,
+while `verify-only` dispatch and pull requests never deploy. No production job or
+configuration exists, and an initial main push needs no skip-CI exception or
+duplicate bootstrap dispatch.
+
+`worker-build` is pinned to 0.8.6, matching `worker` 0.8.6. Its upstream release
+explicitly pins `cargo-platform` for Rust 1.88 compatibility. The neighboring
+Identity service successfully uses worker-build 0.8.5, but there is no reason to
+carry a mismatched tool version into this new project. Local tool installation is
+not required; the initial hosted installation is cached for subsequent builds.
+[workers-rs v0.8.6 release](https://github.com/cloudflare/workers-rs/releases/tag/v0.8.6)
+
+Repository secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` are already
+configured. Only their names were inspected. Use a dedicated least-privilege token
+for Workers Scripts Write, D1 Edit and the domain binding scope required by
+Wrangler custom-domain routes; no R2 credentials are required. A
+`cloudflare-staging` environment can add approval policy without changing code.
+
+## Initial key and client setup
+
+1. `node scripts/admin-key.mjs --init` creates or reuses the ignored administrator
+   credential with exclusive OS-user access. It never prints the key.
+2. `node scripts/deployment-oidc-client.mjs` creates/reuses the ignored RSA JWK and
+   exports only the public `infra/subscribe-staging-client.json` manifest.
+3. Store the configurable recipient in ignored `.secrets/admin-email`.
+4. `node scripts/deployment-secrets.mjs` pipes local secret values directly to
+   Wrangler; it suppresses child output and reports names/status only.
+5. Register the public client through Identity's existing reviewed,
+   create-only generator and staging migration overlay. This modifies deployment
+   metadata, **not** the Identity service implementation. Root approval of the
+   specific public SQL is required before applying remotely.
+
+The administrator key grants code issuance only. It is never included in Actions
+artifacts, client metadata, static frontend bundles, request URLs, logs, or chat.
+Application billing contact data is not an authentication claim.
+
+## Operating commands
+
+```powershell
+# Build/test/package on GitHub, then deploy using existing repository secrets.
+gh workflow run ci.yml --ref <candidate-branch> -f delivery=staging-only
+
+# Deploy a downloaded, checksum-verified artifact with local Wrangler auth if needed.
+# This is a recovery path, not a second build pipeline.
+npm run deploy:staging
+npm run smoke:staging
+```
+
+Apply forward-only D1 migrations before the corresponding Worker. A Worker rollback
+does not roll back database content. Preserve old external API contracts and use
+additive schema changes for future releases. Billing's health, anonymous rejection,
+Subscribe HTML and guest session projection are bounded smoke checks; they do not
+replace the required real browser registration → email receipt → profile →
+activation → subscription reload acceptance journey.
+
+## Sources and interpretation
+
+- [Cloudflare Rust Workers](https://developers.cloudflare.com/workers/languages/rust/)
+  supports workers-rs and `worker-build`; the JS shim is generated platform glue,
+  not application backend code.
+- [Static-assets SPA routing](https://developers.cloudflare.com/workers/static-assets/routing/single-page-application/)
+  supports an assets binding and worker-first execution. All requests reach Rust,
+  which handles explicit APIs and delegates only asset routes to `ASSETS`; this
+  unifies environment-paired framing policy and preserves asset Cache-Control
+  without accidentally returning SPA HTML for API and health endpoints.
+- [D1 migrations](https://developers.cloudflare.com/d1/reference/migrations/)
+  provide ordered migration history; application deployment remains separate.
+- [GitHub setup-node](https://github.com/actions/setup-node#caching-global-packages-data)
+  caches package-manager global data rather than dependency trees.
+- [GitHub deployment environments](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/control-deployments)
+  scope release approvals and secret availability.
+- [Empirical CI/CD cache study, 2026](https://arxiv.org/abs/2604.13129)
+  examines 952 repositories. It is an emerging preprint, not a deployment authority;
+  its useful design implication is to make cache keys and observed cold/warm times
+  explicit rather than treating caching as automatically effective. Record actual
+  first and subsequent hosted build durations after rollout; tune only the
+  measured critical path.

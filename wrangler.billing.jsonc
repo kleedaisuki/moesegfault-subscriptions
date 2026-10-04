@@ -1,0 +1,23 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "moesegfault-billing-staging",
+  "main": "./crates/billing/build/worker/shim.mjs",
+  "compatibility_date": "2026-09-15",
+  "workers_dev": false,
+  "preview_urls": false,
+  "minify": true,
+  "routes": [{ "pattern": "billing-staging.moesegfault.dev", "custom_domain": true }],
+  "vars": {
+    "ENVIRONMENT": "staging",
+    "IDENTITY_ISSUER": "https://identity-staging.moesegfault.dev",
+    "BILLING_AUDIENCES": "[\"subscribe-staging\"]",
+    "PLAN_REGISTRY_JSON": "[{\"id\":\"platform-monthly\",\"product_id\":\"moesegfault-platform\",\"name\":{\"zh-CN\":\"平台月度订阅\",\"en\":\"Platform monthly\",\"ja\":\"プラットフォーム月額\"},\"description\":{\"zh-CN\":\"使用激活码开启 30 天平台订阅。\",\"en\":\"Activate 30 days of platform access with a code.\",\"ja\":\"コードで 30 日間のプラットフォーム利用を有効にします。\"},\"duration_days\":30,\"active\":true,\"entitlements\":[\"platform.access\"]}]",
+    "EMAIL_FROM_ADDRESS": "subscribe@moesegfault.dev"
+  },
+  "d1_databases": [{
+    "binding": "BILLING_DB", "database_name": "moesegfault-billing-staging",
+    "database_id": "47022fe7-0e14-4bbb-a52a-c59358b938b1", "migrations_dir": "migrations/billing"
+  }],
+  "send_email": [{ "name": "EMAIL", "allowed_sender_addresses": ["subscribe@moesegfault.dev"] }],
+  "observability": { "enabled": true, "logs": { "enabled": true, "head_sampling_rate": 1 } }
+}

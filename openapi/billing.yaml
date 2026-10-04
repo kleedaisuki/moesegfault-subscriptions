@@ -1,0 +1,205 @@
+openapi: 3.1.0
+info:
+  title: moeSegFault Billing
+  version: 0.1.0
+  description: Identity-authenticated billing accounts, deployment-owned plans, and activation-code subscriptions.
+servers:
+  - url: https://billing-staging.moesegfault.dev
+security:
+  - identityAccessToken: []
+paths:
+  /healthz:
+    get:
+      operationId: health
+      security: []
+      responses:
+        '200': {description: Worker is running}
+  /v1/plans:
+    get:
+      operationId: listPlans
+      security: []
+      responses:
+        '200':
+          description: Deployment-owned plan catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [plans]
+                properties:
+                  plans: {type: array, items: {$ref: '#/components/schemas/Plan'}}
+  /v1/me:
+    get:
+      operationId: getBillingAccount
+      responses:
+        '200':
+          description: Principal's billing account and subscription grants
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [account, subscriptions]
+                properties:
+                  account: {$ref: '#/components/schemas/BillingAccount'}
+                  subscriptions: {type: array, items: {$ref: '#/components/schemas/Subscription'}}
+        '401': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /v1/me/profile:
+    put:
+      operationId: replaceBillingProfile
+      description: Replaces self-declared billing details; null or omitted fields clear existing values. Contacts are not verified Identity claims.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/BillingProfile'}
+      responses:
+        '200':
+          description: Updated billing account
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  account: {$ref: '#/components/schemas/BillingAccount'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+  /v1/activations:
+    post:
+      operationId: redeemActivationCode
+      description: Atomically redeems a one-use code and extends max(expiration,now). Identical retries replay the original result.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [code]
+              properties:
+                code: {type: string, minLength: 24, maxLength: 128}
+      responses:
+        '200':
+          description: Accepted grant or immutable retry result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [subscription, replayed]
+                properties:
+                  subscription: {$ref: '#/components/schemas/Subscription'}
+                  replayed: {type: boolean}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+  /v1/admin/activation-codes:
+    post:
+      operationId: issueActivationCode
+      description: Administrator-only issuance. Raw codes are mailed to the secret recipient and never returned.
+      security:
+        - administratorKey: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [plan_id]
+              properties:
+                plan_id: {type: string}
+      responses:
+        '200':
+          description: Non-secret mail delivery receipt; unknown delivery must be investigated without blindly reissuing
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [issuance_id, status]
+                properties:
+                  issuance_id: {type: string}
+                  status: {type: string, enum: [pending, sending, sent, unknown]}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+components:
+  securitySchemes:
+    identityAccessToken: {type: http, scheme: bearer, bearerFormat: JWT}
+    administratorKey: {type: http, scheme: bearer, description: Separate secret; OAuth user tokens never authorize issuance}
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: {type: string, minLength: 16, maxLength: 128}
+  responses:
+    Problem:
+      description: Stable RFC 9457 problem with correlation header
+      headers:
+        x-moesegfault-correlation-id:
+          schema: {type: string}
+      content:
+        application/problem+json:
+          schema:
+            type: object
+            required: [type, title, status, error_code]
+            properties:
+              type: {type: string, format: uri}
+              title: {type: string}
+              status: {type: integer}
+              error_code: {type: string}
+  schemas:
+    LocalizedText:
+      type: object
+      required: [zh-CN, en, ja]
+      properties:
+        zh-CN: {type: string}
+        en: {type: string}
+        ja: {type: string}
+    Plan:
+      type: object
+      required: [id, product_id, name, description, duration_days, active, entitlements]
+      properties:
+        id: {type: string}
+        product_id: {type: string}
+        name: {$ref: '#/components/schemas/LocalizedText'}
+        description: {$ref: '#/components/schemas/LocalizedText'}
+        duration_days: {type: integer, minimum: 1, maximum: 3650}
+        active: {type: boolean}
+        entitlements: {type: array, items: {type: string}}
+    BillingProfile:
+      type: object
+      additionalProperties: false
+      properties:
+        display_name: {type: [string, 'null'], maxLength: 254}
+        email: {type: [string, 'null'], maxLength: 254}
+        country: {type: [string, 'null'], pattern: '^[A-Za-z]{2}$'}
+        address_line1: {type: [string, 'null'], maxLength: 254}
+        address_line2: {type: [string, 'null'], maxLength: 254}
+        city: {type: [string, 'null'], maxLength: 254}
+        postal_code: {type: [string, 'null'], maxLength: 254}
+        tax_id: {type: [string, 'null'], maxLength: 254}
+    BillingAccount:
+      type: object
+      required: [id, profile, created_at, updated_at]
+      properties:
+        id: {type: string}
+        profile: {$ref: '#/components/schemas/BillingProfile'}
+        created_at: {type: integer, description: Unix seconds}
+        updated_at: {type: integer, description: Unix seconds}
+    Subscription:
+      type: object
+      required: [id, product_id, plan_id, status, current_period_start, current_period_end, activation_source, entitlements]
+      properties:
+        id: {type: string}
+        product_id: {type: string}
+        plan_id: {type: string}
+        status: {type: string, enum: [active, expired]}
+        current_period_start: {type: integer, description: Unix seconds}
+        current_period_end: {type: integer, description: Unix seconds}
+        activation_source: {type: string, enum: [activation_code]}
+        entitlements: {type: array, items: {type: string}}
