@@ -1,10 +1,12 @@
 # Local administrator issuance
 
-This release is deployed to staging only. See the [staging acceptance report](validation/staging-e2e-2026-10-05.md) for the end-to-end result; production has not been deployed.
+See the [staging acceptance report](validation/staging-e2e-2026-10-05.md) for the staging end-to-end result. Production credential setup is separate; availability follows the deployment release record, not local administrator initialization.
 
 ## Setup
 
 Run `node scripts/admin-key.mjs --init` once. It generates 32 random bytes in the ignored repository-local `.secrets/billing-admin-key`. The create-only command never rotates an existing key. POSIX permissions are owner-only; Windows removes inherited ACLs and grants the current user full control. Neither the human nor an agent needs to inspect the value.
+
+For production, use `node scripts/admin-key.mjs --init --environment production`. It creates or reuses only `.secrets/production/billing-admin-key`, independently of staging. The [production bootstrap](deployment/production-secrets.md) also creates this same production key; running either initializer afterward does not rotate it. The default and legacy `keyPath` export remain staging-compatible.
 
 Provision that file into the selected Worker's `BILLING_ADMIN_KEY` through a subprocess stdin, never a command argument, terminal output, GitHub log, or frontend bundle. Provision `ADMIN_EMAIL` separately from private environment configuration; do not embed its recipient value in source or documentation. It is replaceable without editing code. Cloudflare's `EMAIL` send binding must permit only the sender `subscribe@moesegfault.dev`, and the domain must be enabled for Email Sending.
 
@@ -16,13 +18,17 @@ The key is intentionally an administrator capability: possession authorizes issu
 
 ```powershell
 node scripts/admin-issue.mjs --plan platform-monthly
+# Production explicitly uses its independently provisioned key and production mailbox.
+node scripts/admin-issue.mjs --plan platform-monthly --environment production
 # Use the printed non-secret UUID after timeout or interrupted execution.
 node scripts/admin-issue.mjs --resume ORIGINAL_UUID
 ```
 
 The script defaults to staging, accepts only the fixed staging / production billing origins, refuses redirects, has a 20-second request deadline, and stores the original non-secret intent under `.secrets/issuance/`. Recovery replays exactly that plan, environment, and UUID. No credential or activation code is printed or stored in the intent.
 
-The production selector is reserved for a separately provisioned future deployment; it does not deploy or configure production. Choose other plan IDs from `infra/plans.staging.json`. To register a plan, edit that catalog, run `npm run plans:sync` and `npm run plans:check`, and commit the catalog plus synchronized Worker configuration for CI deployment. See [plan operations](../skills/moesegfault-billing/references/plans.md).
+The credential path is resolved from the validated, immutable persisted intent origin, including on `--resume`; a resumed request cannot supply a replacement environment. Production reads only `.secrets/production/billing-admin-key`, never the staging key. The production selector does not deploy or configure production, and its mailbox is not overridden by this CLI.
+
+Choose plan IDs from the selected environment's catalog: `infra/plans.staging.json` or `infra/plans.production.json`. After editing, run `npm run plans:sync` and `npm run plans:check`; append `-- --environment production` for production. Commit the selected catalog plus synchronized Billing configuration. Main deploys staging only; production requires explicit immutable-artifact promotion. See [plan operations](../skills/moesegfault-billing/references/plans.md).
 
 `POST /v1/admin/activation-codes` receives `{ "plan_id": "..." }` and the intent UUID in `Idempotency-Key`. The response is a status-only receipt. The server generates and emails the capability; it never returns a raw code to the caller.
 

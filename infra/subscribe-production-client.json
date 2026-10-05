@@ -1,0 +1,34 @@
+{
+  "client_id": "subscribe",
+  "display_name": "moeSegFault Subscribe",
+  "client_type": "confidential",
+  "token_endpoint_auth_method": "private_key_jwt",
+  "sector_identifier": "subscribe.moesegfault.dev",
+  "subject_salt_revision": 1,
+  "redirect_uris": [
+    {
+      "uri": "https://subscribe.moesegfault.dev/auth/callback",
+      "match_mode": "exact"
+    }
+  ],
+  "post_logout_redirect_uris": [
+    {
+      "uri": "https://subscribe.moesegfault.dev/auth/logout/callback",
+      "match_mode": "exact"
+    }
+  ],
+  "scopes": [
+    "openid",
+    "profile"
+  ],
+  "public_jwks": [
+    {
+      "kty": "RSA",
+      "n": "j13G886quuVRO-RTnCkQnZhVmHx_0z1amiqZt0PHFBpokZD7h8cit0DVb1metm9wmmvGNqKcu9LWsm5ILo9xrqTGbuNMe1FIA4lyjyhUro5zIh_zufynkPsvjjtPgqr_RV2kTHkbTY7i2mSUjtq4vyN2wCbB6BkfNhl8XSAzSczlf9qjKv1HiiG76ZNU48ZiSZ71n4y_oEk9V4y3h0e4KZnFxikPAnGotO9eqg9imAVtbuh9t65-vjGxUz8TYwJyr7_NjMFZNfww3Pcp2gFrh45yz4NscVv0ake7xhLM8868zcas8MEYMKYsK_z3kmKraBCCvVIPFE8L7cX4r0fXQQ",
+      "e": "AQAB",
+      "alg": "RS256",
+      "use": "sig",
+      "kid": "subscribe-production-20261005"
+    }
+  ]
+}

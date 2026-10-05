@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 /**
- * Bound post-release checks to deployed staging health, auth boundaries, and asset delivery.
- * Usage: npm run smoke:staging
+ * Bound post-release checks to explicit environment health, auth boundaries, and asset delivery.
+ * Usage: npm run smoke:staging; npm run smoke:production
  * User registration, email delivery, and redemption are acceptance journeys, not CI loops.
  */
 import assert from 'node:assert/strict';
 
-const endpoints = {
-  billing: 'https://billing-staging.moesegfault.dev',
-  subscribe: 'https://subscribe-staging.moesegfault.dev',
-};
+const target = process.argv[2] ?? process.env.DEPLOYMENT_SMOKE_TARGET ?? 'staging';
+if (!['staging', 'production'].includes(target)) throw new Error('Smoke target must be staging or production.');
+const suffix = target === 'staging' ? '-staging' : '';
+const endpoints = { billing: `https://billing${suffix}.moesegfault.dev`, subscribe: `https://subscribe${suffix}.moesegfault.dev` };
 
 /** Bound initial-domain DNS propagation and edge rollout retries to at most 90 seconds. */
 async function request(url, init = {}) {
@@ -38,8 +38,9 @@ const home = await request(endpoints.subscribe, { headers: { 'Sec-Fetch-Mode': '
 assert.equal(home.status, 200, 'Subscribe HTML');
 assert.match(home.headers.get('content-type') ?? '', /text\/html/, 'HTML media type');
 assert.match(await home.text(), /<html/i, 'HTML document');
+assert.ok(home.headers.get('content-security-policy')?.includes(`frame-ancestors 'self' https://account${suffix}.moesegfault.dev`), 'HTML uses its own Account frame policy');
 const session = await request(`${endpoints.subscribe}/api/session`);
 assert.ok([200, 401].includes(session.status), 'Anonymous session is either safe guest projection or 401');
 const account = await request(`${endpoints.billing}/v1/me`);
 assert.equal(account.status, 401, 'Billing rejects missing subject credential');
-process.stdout.write('Staging smoke passed: billing health, Subscribe HTML, guest session, protected billing.\n');
+process.stdout.write(`${target} smoke passed: billing health, Subscribe HTML/CSP, guest session, protected billing.\n`);

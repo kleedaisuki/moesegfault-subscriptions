@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Synchronize the human-editable staging plan catalog into the reviewed Wrangler variable.
- * Usage: npm run plans:sync; npm run plans:check
+ * Synchronize an explicit environment's human-editable catalog into its reviewed Wrangler variable.
+ * Usage: npm run plans:sync; npm run plans:check:production
  * Matches the Rust registry's bounded metadata contract; never reinterpret a deployed plan ID.
  */
 import { readFile, writeFile } from 'node:fs/promises';
@@ -27,21 +27,28 @@ export function validateCatalog(catalog) {
   return catalog;
 }
 
-/** Synchronize staging only, or fail without writing when invoked by a validation gate. */
+/** Synchronize one explicit environment, or fail without writing when invoked by a validation gate. */
 async function main() {
   const args = process.argv.slice(2);
-  if (args.length > 1 || (args.length === 1 && args[0] !== '--check')) throw new Error('Usage: deployment-plans.mjs [--check]');
-  const configUrl = new URL('../wrangler.billing.jsonc', import.meta.url);
-  const catalog = validateCatalog(JSON.parse(await readFile(new URL('../infra/plans.staging.json', import.meta.url), 'utf8')));
+  let target = 'staging';
+  let check = false;
+  for (let index = 0; index < args.length; index += 1) {
+    if (args[index] === '--check') { check = true; continue; }
+    if (args[index] === '--environment' && ['staging', 'production'].includes(args[index + 1])) { target = args[++index]; continue; }
+    throw new Error('Usage: deployment-plans.mjs [--check] [--environment staging|production]');
+  }
+  const suffix = target === 'production' ? '.production' : '';
+  const configUrl = new URL(`../wrangler.billing${suffix}.jsonc`, import.meta.url);
+  const catalog = validateCatalog(JSON.parse(await readFile(new URL(`../infra/plans.${target}.json`, import.meta.url), 'utf8')));
   const config = JSON.parse(await readFile(configUrl, 'utf8'));
-  if (config.name !== 'moesegfault-billing-staging') throw new Error('Only staging catalog configuration is supported.');
+  if (config.name !== `moesegfault-billing${target === 'staging' ? '-staging' : ''}` || config.vars.ENVIRONMENT !== target) throw new Error('Catalog configuration does not match the explicit environment.');
   const value = JSON.stringify(catalog);
-  if (args[0] === '--check' && config.vars.PLAN_REGISTRY_JSON !== value) throw new Error('Catalog differs from Worker configuration; run npm run plans:sync.');
-  if (args[0] !== '--check' && config.vars.PLAN_REGISTRY_JSON !== value) {
+  if (check && config.vars.PLAN_REGISTRY_JSON !== value) throw new Error('Catalog differs from Worker configuration; run npm run plans:sync for the same environment.');
+  if (!check && config.vars.PLAN_REGISTRY_JSON !== value) {
     config.vars.PLAN_REGISTRY_JSON = value;
     await writeFile(configUrl, `${JSON.stringify(config, null, 2)}\n`);
   }
-  process.stdout.write('Staging plan catalog and Worker configuration match.\n');
+  process.stdout.write(`${target} plan catalog and Worker configuration match.\n`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();

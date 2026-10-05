@@ -1,0 +1,21 @@
+[
+  {
+    "id": "platform-monthly",
+    "product_id": "moesegfault-platform",
+    "name": {
+      "zh-CN": "平台月度订阅",
+      "en": "Platform monthly",
+      "ja": "プラットフォーム月額"
+    },
+    "description": {
+      "zh-CN": "使用激活码开启 30 天平台订阅。",
+      "en": "Activate 30 days of platform access with a code.",
+      "ja": "コードで 30 日間のプラットフォーム利用を有効にします。"
+    },
+    "duration_days": 30,
+    "active": true,
+    "entitlements": [
+      "platform.access"
+    ]
+  }
+]

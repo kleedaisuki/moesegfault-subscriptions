@@ -9,6 +9,19 @@ export const root = fileURLToPath(new URL('../', import.meta.url));
 export const secretDirectory = join(root, '.secrets');
 export const keyPath = join(secretDirectory, 'billing-admin-key');
 
+/** Staging retains its established path; production uses an independent capability. */
+export function adminKeyPath(environment = 'staging') {
+  if (!['staging', 'production'].includes(environment)) throw new Error('invalid_environment');
+  return environment === 'production' ? join(secretDirectory, 'production', 'billing-admin-key') : keyPath;
+}
+
+/** Parse the create-only CLI without changing the legacy default. */
+export function initializationOptions(args) {
+  if (args.length === 1 && args[0] === '--init') return 'staging';
+  if (args.length === 3 && args[0] === '--init' && args[1] === '--environment' && ['staging', 'production'].includes(args[2])) return args[2];
+  throw new Error('invalid_arguments');
+}
+
 /** Reject symbolic links and grant access only to the current OS account. */
 export function protect(path, directory = false) {
   if (lstatSync(path).isSymbolicLink()) throw new Error('unsafe_local_path');
@@ -30,25 +43,34 @@ export function prepareSecrets() {
 }
 
 /** Create once: existing deployment credentials must never be silently rotated. */
-export function initializeKey() {
+export function initializeKey(environment = 'staging') {
+  const path = adminKeyPath(environment);
   prepareSecrets();
+  if (environment === 'production') {
+    const directory = join(secretDirectory, 'production');
+    mkdirSync(directory, { recursive: true, mode: 0o700 });
+    if (!lstatSync(directory).isDirectory()) throw new Error('unsafe_local_path');
+    protect(directory, true);
+    execFileSync('git', ['check-ignore', '--quiet', '.secrets/production/billing-admin-key'], { cwd: root, stdio: 'ignore' });
+  }
   try {
-    writeFileSync(keyPath, randomBytes(32).toString('base64url'), { flag: 'wx', mode: 0o600 });
-    protect(keyPath);
+    writeFileSync(path, randomBytes(32).toString('base64url'), { flag: 'wx', mode: 0o600 });
+    protect(path);
     return 'created';
   } catch (error) {
     if (error.code !== 'EEXIST') throw error;
-    protect(keyPath);
+    if (!lstatSync(path).isFile()) throw new Error('unsafe_local_path');
+    protect(path);
     return 'existing';
   }
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  if (process.argv.slice(2).join(' ') !== '--init') {
-    console.error('Usage: node scripts/admin-key.mjs --init');
+  try {
+    const environment = initializationOptions(process.argv.slice(2));
+    console.log(`${environment} administrator key: ${initializeKey(environment)}. Key material is never displayed.`);
+  } catch {
+    console.error('Administrator key setup failed. Usage: node scripts/admin-key.mjs --init [--environment staging|production]. Check Git ignore and local file permissions.');
     process.exitCode = 1;
-  } else {
-    try { console.log(`Administrator key: ${initializeKey()}. Key material is never displayed.`); }
-    catch { console.error('Administrator key setup failed. Check Git ignore and local file permissions.'); process.exitCode = 1; }
   }
 }

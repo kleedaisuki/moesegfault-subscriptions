@@ -70,7 +70,7 @@ test('client registration contains only public exact staging metadata', async ()
   assert.deepEqual(manifest.redirect_uris, [{ uri: 'https://subscribe-staging.moesegfault.dev/auth/callback', match_mode: 'exact' }]);
 });
 
-test('workflow builds once, pins actions, keeps secrets out of package and has no production job', async () => {
+test('workflow builds once and production promotion requires an explicit manual main-only target', async () => {
   const workflow = await readFile(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');
   assert.match(workflow, /needs: \[rust, frontend\]/);
   assert.match(workflow, /environment: cloudflare-staging/);
@@ -78,7 +78,10 @@ test('workflow builds once, pins actions, keeps secrets out of package and has n
   assert.match(workflow, /inputs.delivery == 'staging-only'/);
   assert.match(workflow, /cancel-in-progress: false/);
   assert.match(workflow, /npm audit --audit-level=high/);
-  assert.doesNotMatch(workflow, /\n  production:/);
+  assert.match(workflow, /environment: cloudflare-production/);
+  assert.match(workflow, /inputs.delivery == 'production-only' && github.ref == 'refs\/heads\/main'/);
+  assert.match(workflow, /run-id: \$\{\{ inputs.artifact_run_id \}\}/);
+  assert.match(workflow, /PRODUCTION_DEPLOY_CONFIRM: production-only/);
   assert.doesNotMatch(workflow, /tar .*\.secrets/);
   for (const action of workflow.matchAll(/uses: (\S+)/g)) assert.match(action[1], /@[a-f0-9]{40}$/);
 });

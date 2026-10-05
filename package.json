@@ -14,9 +14,13 @@
     "package:billing": "wrangler deploy --dry-run --outdir=.temp/package/billing --config wrangler.billing.jsonc",
     "package:subscribe": "wrangler deploy --dry-run --outdir=.temp/package/subscribe --config wrangler.subscribe.jsonc",
     "deploy:staging": "node scripts/deployment-release.mjs",
+    "deploy:production": "node scripts/deployment-release.mjs production",
     "smoke:staging": "node scripts/deployment-smoke.mjs",
+    "smoke:production": "node scripts/deployment-smoke.mjs production",
     "plans:sync": "node scripts/deployment-plans.mjs",
-    "plans:check": "node scripts/deployment-plans.mjs --check"
+    "plans:check": "node scripts/deployment-plans.mjs --check",
+    "plans:sync:production": "node scripts/deployment-plans.mjs --environment production",
+    "plans:check:production": "node scripts/deployment-plans.mjs --check --environment production"
   },
   "devDependencies": { "wrangler": "4.147.0" }
 }

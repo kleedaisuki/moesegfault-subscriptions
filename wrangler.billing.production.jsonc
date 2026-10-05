@@ -1,0 +1,23 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "moesegfault-billing",
+  "main": "./crates/billing/build/worker/shim.mjs",
+  "compatibility_date": "2026-09-15",
+  "workers_dev": false,
+  "preview_urls": false,
+  "minify": true,
+  "routes": [{ "pattern": "billing.moesegfault.dev", "custom_domain": true }],
+  "vars": {
+    "ENVIRONMENT": "production",
+    "IDENTITY_ISSUER": "https://identity.moesegfault.dev",
+    "BILLING_AUDIENCES": "[\"subscribe\"]",
+    "PLAN_REGISTRY_JSON": "[{\"id\":\"platform-monthly\",\"product_id\":\"moesegfault-platform\",\"name\":{\"zh-CN\":\"平台月度订阅\",\"en\":\"Platform monthly\",\"ja\":\"プラットフォーム月額\"},\"description\":{\"zh-CN\":\"使用激活码开启 30 天平台订阅。\",\"en\":\"Activate 30 days of platform access with a code.\",\"ja\":\"コードで 30 日間のプラットフォーム利用を有効にします。\"},\"duration_days\":30,\"active\":true,\"entitlements\":[\"platform.access\"]}]",
+    "EMAIL_FROM_ADDRESS": "subscribe@moesegfault.dev"
+  },
+  "d1_databases": [{
+    "binding": "BILLING_DB", "database_name": "moesegfault-billing-production",
+    "database_id": "b639187a-5a0c-4af9-b1d0-b6bf863075fa", "migrations_dir": "migrations/billing"
+  }],
+  "send_email": [{ "name": "EMAIL", "allowed_sender_addresses": ["subscribe@moesegfault.dev"] }],
+  "observability": { "enabled": true, "redact_query_string": true, "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false } }
+}
