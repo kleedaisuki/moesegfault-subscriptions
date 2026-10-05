@@ -4,17 +4,18 @@ Rust Cloudflare Workers for Billing and Subscribe, with a TypeScript/React
 subscription frontend. Identity performs authentication; Billing verifies access
 tokens and owns billing accounts, profiles, subscriptions, and activation grants.
 
-## Staging surfaces
+## Service surfaces
 
-| Surface | URL | Responsibility |
+| Surface | Production | Staging |
 | --- | --- | --- |
-| Billing | https://billing-staging.moesegfault.dev | Validated bearer-token business API |
-| Subscribe | https://subscribe-staging.moesegfault.dev | OIDC BFF, profile, activation, subscription status |
-| Account section | https://account-staging.moesegfault.dev/subscriptions | Dedicated authenticated subscription viewer integration |
+| Billing business API | https://billing.moesegfault.dev | https://billing-staging.moesegfault.dev |
+| Subscribe portal / OIDC BFF | https://subscribe.moesegfault.dev | https://subscribe-staging.moesegfault.dev |
+| Account subscription section | https://account.moesegfault.dev/subscriptions | https://account-staging.moesegfault.dev/subscriptions |
 
-This release is staging-only; production has not been deployed. See the
-[staging acceptance report](docs/validation/staging-e2e-2026-10-05.md) for the
-completed browser, registration, profile, activation, and Account checks.
+Production deployment is live and uses independent configuration,
+databases, client registration, and credentials. Deployment alone does not establish
+production end-to-end acceptance. See the [staging acceptance report](docs/validation/staging-e2e-2026-10-05.md)
+for the completed staging browser, registration, profile, activation, and Account checks.
 
 ## Integration
 
@@ -38,7 +39,8 @@ completed browser, registration, profile, activation, and Account checks.
 ## Local administrator workflow
 
 See [administrator operations](docs/admin-operations.md) for setup and recovery.
-The local script reads its ignored `.secrets/billing-admin-key` automatically.
+The local script automatically selects the ignored administrator key for the
+requested environment; recovery derives that choice from the immutable intent.
 The value is never printed. Issuance sends codes from `subscribe@moesegfault.dev`
 to the configured `ADMIN_EMAIL` Worker secret, not to a request-supplied address.
 `ADMIN_EMAIL` is an independently replaceable secret; recipient values belong in
@@ -52,9 +54,15 @@ node scripts/admin-key.mjs --init
 node scripts/admin-issue.mjs --plan platform-monthly
 # Recover the same request, not a newly generated code.
 node scripts/admin-issue.mjs --resume ORIGINAL_UUID
+# Production uses independently initialized and provisioned credentials.
+node scripts/admin-key.mjs --init --environment production
+node scripts/admin-issue.mjs --plan platform-monthly --environment production
 ```
 
-## Register a staging plan
+Staging remains the default. See [production credential bootstrap](docs/deployment/production-secrets.md)
+for create-only OIDC/admin initialization and private provisioning; never copy staging keys.
+
+## Register a plan
 
 Edit the readable catalog `infra/plans.staging.json`, retaining stable plan/product
 IDs and providing Chinese, English, and Japanese metadata.
@@ -64,9 +72,17 @@ npm run plans:sync
 npm run plans:check
 ```
 
-Commit both the catalog and synchronized `wrangler.billing.jsonc`. GitHub Actions
-checks their agreement and deploys the reviewed configuration with the staging
-release. Existing issued codes retain their grant snapshot. See
+Production uses the independent `infra/plans.production.json` catalog:
+
+```sh
+npm run plans:sync:production
+npm run plans:check:production
+```
+
+Commit the catalog and matching Billing configuration (`wrangler.billing.jsonc`
+or `wrangler.billing.production.jsonc`). CI checks their agreement. Main releases
+staging only; production requires explicit promotion. Existing issued codes retain
+their grant snapshot. See
 [plan operations](skills/moesegfault-billing/references/plans.md).
 
 ## Development and deployment
@@ -87,8 +103,16 @@ cargo fmt --all -- --check
 GitHub Actions builds Rust/Wasm once, tests the relevant domain/frontend/storage
 contracts, caches Cargo/npm/tooling, and deploys a checksummed immutable package
 without rebuilding. Main pushes deploy staging; manually select `staging-only`
-in the staging delivery workflow to deploy a candidate. No production promotion
-is included.
+in the staging delivery workflow to deploy a candidate. Production promotes a
+verified immutable artifact explicitly, without rebuilding Rust or frontend assets:
+
+```sh
+gh workflow run ci.yml --ref main -f delivery=production-only -f artifact_run_id=ACCEPTED_RUN_ID
+```
+
+Use a successful, accepted staging artifact run, not an arbitrary revision. See
+[production deployment](docs/deployment/production.md) for promotion guards and
+environment-specific configuration.
 
 Cloudflare deployment secrets remain in GitHub and Workers; public registration
 metadata lives in `infra/`. Identity staging OAuth-client registration uses its

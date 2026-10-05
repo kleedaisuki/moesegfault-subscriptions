@@ -22,4 +22,4 @@ Do not infer a subscription from profile completeness or a successful redirect. 
 
 Use a controlled staging user: register and verify email through Identity, return to Subscribe, complete the profile, activate a legitimately issued code, verify its period / entitlement, and observe the same subscription from Account. Test a replay to ensure it does not grant extra time.
 
-See the [staging acceptance report](../../../docs/validation/staging-e2e-2026-10-05.md) for the integrated release result. Production has not been deployed.
+See the [staging acceptance report](../../../docs/validation/staging-e2e-2026-10-05.md) for the integrated staging result. Production uses its own issuer, `subscribe` client, `subscribe.moesegfault.dev` subject sector, callbacks, keys, and databases and requires a separate acceptance run. Do not reuse staging sessions or recipient overrides in production.

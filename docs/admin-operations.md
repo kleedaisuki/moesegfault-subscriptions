@@ -28,7 +28,7 @@ The script defaults to staging, accepts only the fixed staging / production bill
 
 The credential path is resolved from the validated, immutable persisted intent origin, including on `--resume`; a resumed request cannot supply a replacement environment. Production reads only `.secrets/production/billing-admin-key`, never the staging key. The production selector does not deploy or configure production, and its mailbox is not overridden by this CLI.
 
-Choose plan IDs from the selected environment's catalog: `infra/plans.staging.json` or `infra/plans.production.json`. After editing, run `npm run plans:sync` and `npm run plans:check`; append `-- --environment production` for production. Commit the selected catalog plus synchronized Billing configuration. Main deploys staging only; production requires explicit immutable-artifact promotion. See [plan operations](../skills/moesegfault-billing/references/plans.md).
+Choose plan IDs from the selected environment's catalog: `infra/plans.staging.json` or `infra/plans.production.json`. After editing, run `npm run plans:sync` and `npm run plans:check` for staging; use `npm run plans:sync:production` and `npm run plans:check:production` for production. These explicit shortcuts avoid npm flag-forwarding ambiguity on Windows. Commit the selected catalog plus synchronized Billing configuration. Main deploys staging only; production requires explicit immutable-artifact promotion. See [plan operations](../skills/moesegfault-billing/references/plans.md).
 
 `POST /v1/admin/activation-codes` receives `{ "plan_id": "..." }` and the intent UUID in `Idempotency-Key`. The response is a status-only receipt. The server generates and emails the capability; it never returns a raw code to the caller.
 

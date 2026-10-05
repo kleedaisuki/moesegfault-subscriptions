@@ -10,7 +10,14 @@ Pin the environment's issuer and exact accepted OAuth client audience. Identity 
 
 Billing keys accounts by `(issuer, sub)`. Identity issues pairwise subjects: two clients in different subject sectors receive different `sub` values for the same human and therefore address different BillingAccounts. Adding a client to `BILLING_AUDIENCES` does not join its account to the Subscribe gateway's account.
 
-For separately registered applications that must query grants issued through Subscribe, deployment must deliberately register those clients and the gateway in a shared billing subject sector for that environment, then allowlist each exact registered client ID as an audience. The current staging gateway sector is `subscribe-staging.moesegfault.dev`; do not copy this value into production configuration. Review the shared-sector privacy boundary as part of client onboarding.
+For separately registered applications that must query grants issued through Subscribe, deployment must deliberately register those clients and the gateway in a shared billing subject sector for that environment, then allowlist each exact registered client ID as an audience. Review the shared-sector privacy boundary as part of client onboarding.
+
+| Environment | Gateway client ID | Billing subject sector | Fixed issuer |
+| --- | --- | --- | --- |
+| Staging | `subscribe-staging` | `subscribe-staging.moesegfault.dev` | `https://identity-staging.moesegfault.dev` |
+| Production | `subscribe` | `subscribe.moesegfault.dev` | `https://identity.moesegfault.dev` |
+
+These are distinct registration namespaces, not aliases. Production and staging grants, keys, audiences, and subjects remain isolated. A matching username or accepted audience does not join subjects across sectors or issuers.
 
 Do not change a deployed subject sector without an explicit account/subscription migration: the resulting subjects can orphan existing grants. Never join accounts using email, username, `pid`, or other internal or undocumented claims. If a shared sector is undesirable, or the issuer cannot support the required registration or delegation, request an explicit Identity contract decision rather than weakening token validation. Changes to the Identity service require the user's approval; consumer onboarding is not authorization to implement them.
 

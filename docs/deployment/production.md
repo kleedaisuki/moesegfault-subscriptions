@@ -109,3 +109,60 @@ is not a rollback candidate.
 Known baseline before first live deployment: no production Billing/Subscribe user
 data existed. Staging data and secret files were neither reused nor reset. Record
 the actual promotion run and independent serving metadata below after release.
+
+## First production promotion, 2026-10-05
+
+Configuration/tooling source `7af67707d2b689683239665f740eaac0c43cb122` introduced
+the explicit promotion mechanism. [Run 37269327535](https://github.com/kleedaisuki/moesegfault-subscriptions/actions/runs/37269327535)
+was manually dispatched with `delivery=production-only` and accepted artifact run
+`37222313937`. The production job succeeded in **41 seconds**; Rust, frontend,
+package and staging jobs were all skipped. Including its ordinary main-workflow
+queue, the dispatch ran from `2026-10-05T05:47:18Z` to `05:49:10Z`, corresponding
+to 13:47:18–13:49:10 in Asia/Singapore. It deployed the **same** accepted runtime
+`0e2b8920e8946c012e2fdbab1d227ff928c2b05a`, not a fresh build.
+
+Production smoke passed inside Actions and independently from the configured
+proxy host: both health endpoints, HTTPS HTML/CSP paired with production Account,
+guest session, and Billing unauthenticated 401. Account-level custom-domain
+readback confirms both intended hostnames enabled on their intended Workers.
+Production Identity's public discovery independently returned 200 JSON with its
+exact production issuer. Its owner read back the enabled exact client registration.
+
+After the authorized one-email test and formal-recipient restoration, actual
+deployment API readback confirms:
+
+| Unit | Current serving version | Traffic |
+| --- | --- | ---: |
+| Billing | `65ee60bf-3862-4f6a-9cbb-60a2a40a25c1` | 100% |
+| Subscribe | `e1c926fe-297c-4972-8809-136f10fc5ea5` | 100% |
+
+Subscribe's version annotations identify prefix `0e2b8920e894` and the full
+accepted runtime source. Wrangler secret updates/restoration created subsequent
+Billing configuration versions and cleared those annotations; their code was not
+rebuilt or changed. Record this distinction rather than falsely claiming a Git tag
+on the final secret-only version. Name-only binding readback confirms production
+Billing `ADMIN_EMAIL`/`BILLING_ADMIN_KEY` and Subscribe `CLIENT_PRIVATE_KEY_JWK`.
+Both Workers retain custom logs enabled, invocation logs disabled, and query
+redaction enabled. No secret contents or account/profile/token rows were dumped.
+
+## Authorized single-mail validation
+
+The user separately authorized exactly one production test mail to the owned test
+mailbox, followed by immediate formal-recipient restoration before redemption.
+The private formal file was never modified. Original immutable intent
+`9b94cb58-3ba0-4391-956e-138ac0621812` was sent once after
+`2026-10-05T05:50:40.472Z`; the provider accepted it. Bounded mailbox retrieval did
+not confirm receipt within 180 seconds. The helper restored the formal recipient
+in `finally` and emitted `formal_recipient_restored=true`; no additional intent,
+alternate alias or duplicate mail was created.
+
+Two explicitly authorized narrow zone-level Email Sending GraphQL probes for
+the original time interval returned zero events: first the exact service sender,
+then the same window and limit with its sending domain instead. They requested
+only delivery metadata and would compare recipients in memory, printing
+categories rather than addresses; neither requested bodies or subjects. No
+further queries or sends were performed. This absence does not establish a
+bounce, wrong-recipient delivery, or a provider failure. The Billing owner records
+the bounded diagnostic and missing provider-message-ID correlation separately.
+The root agent owns final real production signup/profile/redemption acceptance;
+provider acceptance is not falsely described as actual inbox receipt.
