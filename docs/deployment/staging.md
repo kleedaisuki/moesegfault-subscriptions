@@ -231,3 +231,36 @@ on. A pure-read verification run must establish the unchanged versions under thi
 policy; no code/settings redeployment is needed just to alter normalized preference
 values. The earlier strict-absence paragraph above is superseded by this evidence
 and contract, not by a relaxed assumption.
+
+## Accepted staged Billing/Subscribe runtime and privacy readback
+
+As of 2026-10-07 12:01:57 UTC (20:01:57 UTC+8), the actual staged runtime is:
+
+| Component | Serving version (100%) | Runtime source |
+| --- | --- | --- |
+| Billing | `2fa3e271-3e93-4b03-a67d-2332f14f0e1d` | `c77b7ddf19d64e5c71c281fd378cfb774d19a559` |
+| Subscribe | `f4682841-2008-4a0f-8b6e-9016c64ca9ca` | `c77b7ddf19d64e5c71c281fd378cfb774d19a559` |
+
+The immutable build, frontend/security gates, packaging and both Worker deployments
+completed in [delivery 37617117905](https://github.com/kleedaisuki/moesegfault-subscriptions/actions/runs/37617117905).
+That run's terminal status is **failure**, because its initial metadata checker
+incorrectly required normalized inactive preferences and absent opt-in Issues to
+be echoed as explicit false. It must not be called a green deployment workflow.
+The new code was already serving; no writer replay was used to correct the checker.
+
+The exact deployed versions subsequently passed independent pure-read privacy
+acceptance in [run 37618095870](https://github.com/kleedaisuki/moesegfault-subscriptions/actions/runs/37618095870),
+using checker source `4fc22988e6e7e90c9d62de74b85259bed27caa0c`.
+Only the read-only diagnosis job ran; build, package, deploy and production jobs
+were skipped. The reader bracketed unchanged single-100% serving versions around
+both diagnosis and verification. For both exact current Worker resources it read
+root=false, Logs=false, Traces=false, invocation_logs=true, and absent opt-in Issues;
+legacy settings and script-settings contained no contradictory capture state.
+The inactive invocation preference is reported as true, not hidden or relabeled;
+the documented Issues absence result is `disabled_by_optin_absence`.
+
+A separate actual `npm run smoke:staging` then passed Billing health, Subscribe
+HTML/CSP, guest session and authenticated-boundary rejection. This establishes
+hosted runtime/readback readiness, not the final amail → human authorization →
+mail usage → retained trace end-to-end acceptance, which is owned by the integrated
+amail delivery run. No production or Identity deployment was performed.
