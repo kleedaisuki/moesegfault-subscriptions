@@ -16,11 +16,46 @@ Explicit BFF mappings:
 
 The opaque ID accepts only 24–128 ASCII base64url characters. Arbitrary suffixes, alternate methods and nested routes are not proxied. JSON bodies retain the existing 16 KiB streaming limit. Browser-supplied Authorization headers are discarded.
 
-Approval payload is `{acknowledge:true,plan_id,overage_budget_micros}`. Human choices override the agent's proposed defaults. Budget is decimal CNY with at most two decimal digits, converted exactly into integer micros (`1 CNY = 1,000,000 micros`); zero disables overage. The consent checkbox resets after plan or budget changes. All authorization-changing logic, budget limits and active paid subscription checks remain authoritative in Billing.
+Current approval payload is `{acknowledge:true,plan_id,overage_budget_micros,currency:"USD"}`. Human choices override the agent's proposed defaults. Budget is decimal USD with at most two decimal digits, converted exactly into integer micros (`1 USD = 1,000,000 micros`); zero disables overage. The maximum approved budget is 10^12 micros. An omitted legacy wire currency retains CNY interpretation, never USD. The consent checkbox resets after plan or budget changes. All authorization-changing logic, budget limits and active paid subscription checks remain authoritative in Billing.
 
 The UI shows Free/Lite/Plus, the current Billing payer, explicit account-binding consent, package quantities and overage prices. Paid plans reuse the existing activation-code form, retaining its stable idempotency key. Activation does not automatically approve binding: the human must click consent afterwards. The displayed copy explicitly states that usage accrues pending settlement and no automatic monetary payment is processed. Cancellation and expired/approved states are separate.
 
 The only completion link currently accepted is exactly `https://amail-staging.moesegfault.dev/billing/return`, without added query or fragment. Completion is explicit navigation, never an automatic redirect or proof of payment. amail must poll its server-side Billing result. Production completion must be explicitly added when production is in scope.
+
+## Fixed USD cutover (2026-10-07; implementation, staging acceptance pending)
+
+The owner-approved community tariff is Free $0, Lite $1.50, Plus $4.50 per month;
+excess accepted envelope recipients $0.001 each, decimal GB-months $0.15, and
+address-months $0.50. Included quantities and existing activation grants do not
+change. This is a new fixed USD tariff, not FX conversion or automatic payment.
+
+Additive Billing migration `0006_amail_usd.sql` labels existing authorizations,
+bindings and immutable usage CNY. New machine intents must explicitly send
+`currency:"USD"`; the new contract is `amail-v0.2.0-usd-v1`. Missing currency remains
+CNY for deterministic historical creation retries: serialization omits the default
+legacy field, preserving the exact old canonical request hash. Only existing CNY
+intent replay is accepted, not new CNY creation. Existing approved CNY receipt
+retries return CNY/`amail-v0.2.0` without mutation. Old pending CNY intents may be
+cancelled/read, but cannot approve new spending; the human requests fresh USD
+consent. Migration guards reject changes to any consent denomination.
+
+Approval atomically replaces the current binding currency with the approved USD
+receipt's currency. A previous CNY cap is not a USD cap. The existing active Lite
+grant still satisfies paid-plan access: there is no additional code redemption.
+The authenticated hosted GET supplies an authoritative typed USD `tariff` object
+(monthly integer micros keyed by stable plan ID, plus three overage rates). The
+browser verifies the exact reviewed contract and values before rendering any
+approvable form, formats the actual server tariff using integer micros, and sends
+explicit USD consent. A missing/unknown/mismatched tariff fails closed. Historical
+CNY has `tariff:null` and a read-only denomination/budget notice, never dollar copy.
+
+Local verification: 53 deployment/SQLite tests and 26 UI tests passed; TypeScript
+checks and Vite build passed. Actual pinned Wrangler 4.147.0 split statements apply
+all Billing and Subscribe migrations, including 0006. Native Rust tests were added
+for unchanged historical request-hash serialization, supported currencies,
+contract version and exact USD tariff; their compilation is delegated to the
+root's hosted build rather than a redundant local Rust build. Production catalog,
+configuration, deployment, Identity and immutable old migration files are untouched.
 
 ## Privacy and observability
 

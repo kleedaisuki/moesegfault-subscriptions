@@ -27,9 +27,9 @@
       "zh-CN": "amail Free"
     },
     "description": {
-      "en": "Community email plan. Inbound mail and semantic search are unmetered; authorized overage accrues pending settlement.",
-      "ja": "コミュニティメール。受信と意味検索は無料。承認済み超過利用は未決済として記録されます。",
-      "zh-CN": "社区邮件套餐。收信与语义搜索不计费；超额用量需用户授权，待结算。"
+      "en": "Community plan USD $0/month. Overage: $0.001/recipient, $0.15/GB-month, $0.50/address-month. Inbound and semantic search unmetered; authorized usage pending settlement.",
+      "ja": "コミュニティ USD $0/月。超過: $0.001/受信者、$0.15/GB月、$0.50/アドレス月。受信・意味検索は無料。承認済み利用は未決済。",
+      "zh-CN": "社区价 $0 USD/月。超额发信 $0.001/收件人、存储 $0.15/GB·月、地址 $0.50/个·月。收信与语义搜索不计费；授权用量待结算。"
     },
     "duration_days": 30,
     "active": true,
@@ -49,9 +49,9 @@
       "zh-CN": "amail Lite"
     },
     "description": {
-      "en": "Community email plan. Inbound mail and semantic search are unmetered; authorized overage accrues pending settlement.",
-      "ja": "コミュニティメール。受信と意味検索は無料。承認済み超過利用は未決済として記録されます。",
-      "zh-CN": "社区邮件套餐。收信与语义搜索不计费；超额用量需用户授权，待结算。"
+      "en": "Community plan USD $1.50/month. Overage: $0.001/recipient, $0.15/GB-month, $0.50/address-month. Inbound and semantic search unmetered; authorized usage pending settlement.",
+      "ja": "コミュニティ USD $1.50/月。超過: $0.001/受信者、$0.15/GB月、$0.50/アドレス月。受信・意味検索は無料。承認済み利用は未決済。",
+      "zh-CN": "社区价 $1.50 USD/月。超额发信 $0.001/收件人、存储 $0.15/GB·月、地址 $0.50/个·月。收信与语义搜索不计费；授权用量待结算。"
     },
     "duration_days": 30,
     "active": true,
@@ -71,9 +71,9 @@
       "zh-CN": "amail Plus"
     },
     "description": {
-      "en": "Community email plan. Inbound mail and semantic search are unmetered; authorized overage accrues pending settlement.",
-      "ja": "コミュニティメール。受信と意味検索は無料。承認済み超過利用は未決済として記録されます。",
-      "zh-CN": "社区邮件套餐。收信与语义搜索不计费；超额用量需用户授权，待结算。"
+      "en": "Community plan USD $4.50/month. Overage: $0.001/recipient, $0.15/GB-month, $0.50/address-month. Inbound and semantic search unmetered; authorized usage pending settlement.",
+      "ja": "コミュニティ USD $4.50/月。超過: $0.001/受信者、$0.15/GB月、$0.50/アドレス月。受信・意味検索は無料。承認済み利用は未決済。",
+      "zh-CN": "社区价 $4.50 USD/月。超额发信 $0.001/收件人、存储 $0.15/GB·月、地址 $0.50/个·月。收信与语义搜索不计费；授权用量待结算。"
     },
     "duration_days": 30,
     "active": true,

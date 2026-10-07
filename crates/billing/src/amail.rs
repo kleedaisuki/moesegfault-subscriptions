@@ -5,15 +5,60 @@ use serde_json::{Value, json};
 use subtle::ConstantTimeEq;
 use worker::{wasm_bindgen::JsValue, *};
 
+/// Denomination is part of every immutable consent and monetary event, never an FX instruction.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "UPPERCASE")]
+pub(crate) enum Currency {
+    /// Omitted legacy wire fields retain the original yuan interpretation.
+    #[default]
+    Cny,
+    /// New human authorizations use the owner-approved fixed dollar tariff.
+    Usd,
+}
+impl Currency {
+    /// Stable persisted ISO currency code.
+    pub(crate) fn code(self) -> &'static str {
+        match self {
+            Self::Cny => "CNY",
+            Self::Usd => "USD",
+        }
+    }
+    /// Historical receipts must never be relabeled as the new contract.
+    fn contract(self) -> &'static str {
+        match self {
+            Self::Cny => "amail-v0.2.0",
+            Self::Usd => "amail-v0.2.0-usd-v1",
+        }
+    }
+    /// Preserve the canonical serialization used by old creation idempotency hashes.
+    fn legacy(&self) -> bool {
+        *self == Self::Cny
+    }
+}
+
+/// Authoritative fixed USD tariff; catalog display names and payer input cannot change prices.
+fn tariff(currency: Currency) -> Value {
+    if currency != Currency::Usd {
+        return Value::Null;
+    }
+    json!({"currency":"USD", "contract_version":"amail-v0.2.0-usd-v1",
+        "monthly_micros":{"amail-free":0,"amail-lite":1500000,"amail-plus":4500000},
+        "outbound_recipient_micros":1000,"storage_gb_month_micros":150000,
+        "address_month_micros":500000})
+}
+
 /// A pending request contains proposed defaults only; approval records the human's actual choices.
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Create {
+    /// Persisted denomination; a missing legacy field means CNY, never USD.
+    #[serde(default, skip_serializing_if = "Currency::legacy")]
+    currency: Currency,
     /// Opaque immutable amail owner key; never a contact identifier.
     owner_id: String,
     /// Stable reviewed plan identifier; no display-name inference.
     plan_id: String,
-    /// Human spending ceiling in integer millionths of CNY.
+    /// Human spending ceiling in integer millionths of the immutable consent currency.
     overage_budget_micros: i64,
     /// Exact deployment-allowlisted completion destination.
     return_url: String,
@@ -22,16 +67,22 @@ struct Create {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Approval {
+    /// Persisted denomination; a missing legacy field means CNY, never USD.
+    #[serde(default)]
+    currency: Currency,
     /// Explicit human consent after reviewing the displayed payer and tariff.
     acknowledge: bool,
     /// Stable reviewed plan identifier; no display-name inference.
     plan_id: String,
-    /// Human spending ceiling in integer millionths of CNY.
+    /// Human spending ceiling in integer millionths of the immutable consent currency.
     overage_budget_micros: i64,
 }
 /// Stored authorizations never contain bearer tokens or mutable contact identifiers.
 #[derive(Deserialize, Serialize)]
 struct Authorization {
+    /// Persisted denomination; a missing legacy field means CNY, never USD.
+    #[serde(default)]
+    currency: Currency,
     /// Random high-entropy authorization navigation handle.
     id: String,
     /// Opaque immutable amail owner key; never a contact identifier.
@@ -40,7 +91,7 @@ struct Authorization {
     request_hash: String,
     /// Stable reviewed plan identifier; no display-name inference.
     plan_id: String,
-    /// Human spending ceiling in integer millionths of CNY.
+    /// Human spending ceiling in integer millionths of the immutable consent currency.
     overage_budget_micros: i64,
     /// Exact deployment-allowlisted completion destination.
     return_url: String,
@@ -66,13 +117,16 @@ struct Authorization {
 /// The payer association is durable; subscription access still expires at the authoritative grant end.
 #[derive(Deserialize)]
 struct Binding {
+    /// Persisted denomination; a missing legacy field means CNY, never USD.
+    #[serde(default)]
+    currency: Currency,
     /// Opaque immutable amail owner key; never a contact identifier.
     owner_id: String,
     /// Verified Billing payer account, absent before human consent.
     account_id: String,
     /// Stable reviewed plan identifier; no display-name inference.
     plan_id: String,
-    /// Human spending ceiling in integer millionths of CNY.
+    /// Human spending ceiling in integer millionths of the immutable consent currency.
     overage_budget_micros: i64,
     /// Original consent receipt that established this binding.
     authorization_id: String,
@@ -90,7 +144,7 @@ fn identifier(value: &str) -> bool {
             .bytes()
             .all(|c| c.is_ascii_alphanumeric() || b"_-".contains(&c))
 }
-/// Restricts grants to the deployment's reviewed amail contract and a bounded CNY budget.
+/// Restricts grants to the deployment's reviewed amail contract and a bounded monetary budget.
 fn valid_choice(plan: &str, budget: i64) -> bool {
     matches!(plan, "amail-free" | "amail-lite" | "amail-plus")
         && (0..=1_000_000_000_000).contains(&budget)
@@ -168,7 +222,7 @@ fn binding_json(row: Binding) -> Result<Value> {
         json!({"owner_id":row.owner_id,"account_id":row.account_id,"product_id":"amail",
         "plan_id":if expired {"amail-free"} else {&row.plan_id},
         "overage_budget_micros":if expired {0} else {row.overage_budget_micros},
-        "currency":"CNY","contract_version":"amail-v0.2.0","valid_until":row.valid_until,
+        "currency":row.currency,"contract_version":row.currency.contract(),"valid_until":row.valid_until,
         "entitlements":if expired {json!(["amail.plan.free"])} else {serde_json::from_str::<Value>(&row.entitlements_json)?},
         "authorization_id":row.authorization_id,"updated_at":row.updated_at}),
     )
@@ -183,7 +237,7 @@ fn authorization_json(row: &Authorization, expose_owner: bool) -> Value {
     let mut value = json!({"id":row.id,"product_id":"amail","plan_id":row.plan_id,
         "overage_budget_micros":row.overage_budget_micros,"return_url":row.return_url,
         "status":status,"expires_at":row.expires_at,"approved_at":row.approved_at,
-        "currency":"CNY","contract_version":"amail-v0.2.0"});
+        "currency":row.currency,"contract_version":row.currency.contract()});
     if expose_owner {
         value["owner_id"] = json!(row.owner_id);
     }
@@ -265,16 +319,22 @@ async fn create(request: &mut Request, env: &Env, db: &D1Database) -> Result<Res
         .and_then(|v| crate::telemetry::parse(&v));
     let trace_id = parent.as_ref().map(|p| p.trace_id.clone());
     let parent_span_id = parent.map(|p| p.span_id);
-    statement(db,"INSERT INTO amail_authorizations(id,owner_id,idempotency_key_hash,request_hash,plan_id,overage_budget_micros,return_url,created_at,expires_at,trace_id,parent_span_id) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11) ON CONFLICT(owner_id,idempotency_key_hash) DO NOTHING",
-        &[json!(domain::random_token()?),json!(input.owner_id),json!(key_hash),json!(request_hash),json!(input.plan_id),json!(input.overage_budget_micros),json!(input.return_url),json!(now),json!(now+1800),json!(trace_id),json!(parent_span_id)])?.run().await?;
-    let row: Authorization = statement(
+    statement(db,"INSERT INTO amail_authorizations(id,owner_id,idempotency_key_hash,request_hash,plan_id,overage_budget_micros,return_url,created_at,expires_at,trace_id,parent_span_id,currency) SELECT ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12 WHERE ?12='USD' ON CONFLICT(owner_id,idempotency_key_hash) DO NOTHING",
+        &[json!(domain::random_token()?),json!(input.owner_id),json!(key_hash),json!(request_hash),json!(input.plan_id),json!(input.overage_budget_micros),json!(input.return_url),json!(now),json!(now+1800),json!(trace_id),json!(parent_span_id),json!(input.currency)])?.run().await?;
+    let row: Option<Authorization> = statement(
         db,
         "SELECT * FROM amail_authorizations WHERE owner_id=?1 AND idempotency_key_hash=?2",
         &[json!(input.owner_id), json!(key_hash)],
     )?
     .first(None)
-    .await?
-    .ok_or_else(|| Error::RustError("authorization_missing".into()))?;
+    .await?;
+    let Some(row) = row else {
+        return problem(
+            409,
+            "currency_upgrade_required",
+            "Request a new explicit USD authorization",
+        );
+    };
     if row.request_hash != request_hash {
         return problem(
             409,
@@ -363,7 +423,7 @@ pub async fn browser_route(
         let plan = plans.iter().find(|p| p.id == row.plan_id);
         return trace_context(
             Response::from_json(
-                &json!({"authorization":authorization_json(&row,false),"plan":plan,"subscription":subscription,
+                &json!({"authorization":authorization_json(&row,false),"plan":plan,"subscription":subscription,"tariff":tariff(row.currency),
             "settlement_mode":"activation_code_and_accrual","requires_activation":row.plan_id != "amail-free" && subscription.is_none_or(|s| s["plan_id"] != row.plan_id)}),
             )?,
             &row,
@@ -389,7 +449,9 @@ pub async fn browser_route(
     if row.status != "pending" {
         return if row.status == "approved"
             && approval.as_ref().is_some_and(|a| {
-                a.plan_id == row.plan_id && a.overage_budget_micros == row.overage_budget_micros
+                a.plan_id == row.plan_id
+                    && a.overage_budget_micros == row.overage_budget_micros
+                    && a.currency == row.currency
             }) {
             service_receipt(&db, row, true).await
         } else {
@@ -412,6 +474,13 @@ pub async fn browser_route(
         return Response::from_json(&json!({"status":"cancelled"}));
     }
     let approval = approval.expect("approve action validated above");
+    if row.currency != Currency::Usd || approval.currency != row.currency {
+        return problem(
+            409,
+            "currency_upgrade_required",
+            "Request fresh USD consent; historical CNY requests cannot approve dollar spending",
+        );
+    }
     let Some(plan) = plans
         .iter()
         .find(|p| p.id == approval.plan_id && p.product_id == "amail" && p.active)
@@ -440,7 +509,7 @@ pub async fn browser_route(
             "This amail account is already linked to a different Billing payer",
         );
     }
-    let update = statement(&db,"UPDATE amail_authorizations SET status='approved',account_id=?2,plan_id=?3,overage_budget_micros=?4,valid_until=?5,entitlements_json=?6,approved_at=?7 WHERE id=?1 AND status='pending' AND expires_at>?7",
+    let update = statement(&db,"UPDATE amail_authorizations SET status='approved',account_id=?2,plan_id=?3,overage_budget_micros=?4,valid_until=?5,entitlements_json=?6,approved_at=?7 WHERE id=?1 AND status='pending' AND expires_at>?7 AND currency='USD'",
         &[json!(id),json!(account.id),json!(approval.plan_id),json!(approval.overage_budget_micros),json!(until),json!(serde_json::to_string(&plan.entitlements)?),json!(domain::now())])?.run().await;
     if let Err(error) = update {
         if error.to_string().contains("amail_payer_conflict") {
@@ -464,6 +533,33 @@ pub async fn browser_route(
 #[cfg(test)]
 mod tests {
     use super::*;
+    /// Historical idempotency hashes omit the absent CNY field; explicit dollars are a new payload.
+    #[test]
+    fn legacy_request_hash_shape_and_explicit_usd_contract() {
+        let original = r#"{"owner_id":"opaque_owner_123456","plan_id":"amail-lite","overage_budget_micros":0,"return_url":"https://example.com"}"#;
+        let legacy: Create = serde_json::from_str(original).unwrap();
+        assert_eq!(legacy.currency, Currency::Cny);
+        assert_eq!(serde_json::to_string(&legacy).unwrap(), original);
+        let mut current = legacy;
+        current.currency = Currency::Usd;
+        let serialized = serde_json::to_string(&current).unwrap();
+        assert_ne!(domain::hash(&serialized), domain::hash(original));
+        assert!(serialized.contains("\"currency\":\"USD\""));
+        assert_eq!(Currency::Cny.contract(), "amail-v0.2.0");
+        assert_eq!(Currency::Usd.contract(), "amail-v0.2.0-usd-v1");
+        assert!(serde_json::from_value::<Create>(json!({"owner_id":"opaque_owner_123456","plan_id":"amail-lite","overage_budget_micros":0,"return_url":"https://example.com","currency":"EUR"})).is_err());
+    }
+    /// Only the reviewed current denomination exposes an approvable hosted tariff.
+    #[test]
+    fn exact_usd_tariff_and_no_reinterpreted_history() {
+        assert!(tariff(Currency::Cny).is_null());
+        let value = tariff(Currency::Usd);
+        assert_eq!(value["monthly_micros"]["amail-lite"], 1_500_000);
+        assert_eq!(value["monthly_micros"]["amail-plus"], 4_500_000);
+        assert_eq!(value["outbound_recipient_micros"], 1_000);
+        assert_eq!(value["storage_gb_month_micros"], 150_000);
+        assert_eq!(value["address_month_micros"], 500_000);
+    }
     #[test]
     fn only_reviewed_plans_and_bounded_budgets() {
         assert!(valid_choice("amail-plus", 29_000_000));

@@ -1,6 +1,6 @@
 //! Service-only amail usage ledger; acceptance records liability, not successful payment.
 
-use crate::{problem, read_json};
+use crate::{amail::Currency, problem, read_json};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use worker::{wasm_bindgen::JsValue, *};
@@ -9,6 +9,9 @@ use worker::{wasm_bindgen::JsValue, *};
 #[derive(Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 struct Usage {
+    /// Omitted old-wire denomination remains CNY for immutable historical retries.
+    #[serde(default)]
+    currency: Currency,
     /// Globally unique stable identifier retained across retries.
     event_id: String,
     /// Opaque amail principal previously bound through human authorization.
@@ -21,7 +24,7 @@ struct Usage {
     meter: String,
     /// Resource quantity, bounded to fit exact SQLite integer storage.
     quantity: i64,
-    /// Incremental liability in millionths of CNY.
+    /// Incremental liability in millionths of the explicit event currency.
     amount_micros: i64,
     /// Event accounting timestamp inside the period.
     occurred_at: i64,
@@ -108,6 +111,24 @@ pub async fn route(request: &mut Request, env: &Env, path: &str) -> Result<Respo
                 .filter(|(k, _)| k == "period_start")
                 .map(|(_, v)| v.into_owned())
                 .collect();
+            let currencies: Vec<_> = request
+                .url()?
+                .query_pairs()
+                .filter(|(k, _)| k == "currency")
+                .map(|(_, v)| v.into_owned())
+                .collect();
+            let currency = match currencies.as_slice() {
+                [] => Currency::Cny,
+                [value] if value == "CNY" => Currency::Cny,
+                [value] if value == "USD" => Currency::Usd,
+                _ => {
+                    return problem(
+                        400,
+                        "invalid_usage_currency",
+                        "Select exactly one supported currency",
+                    );
+                }
+            };
             let period = periods.first().and_then(|v| v.parse::<i64>().ok());
             if !identifier(owner)
                 || periods.len() != 1
@@ -119,7 +140,7 @@ pub async fn route(request: &mut Request, env: &Env, path: &str) -> Result<Respo
                     "Supply a valid accounting period",
                 );
             }
-            return summary(&db, owner, period.unwrap()).await;
+            return summary(&db, owner, period.unwrap(), currency).await;
         }
     }
     problem(404, "not_found", "Not found")
@@ -138,8 +159,9 @@ async fn record(db: &D1Database, event: Usage) -> Result<Response> {
         event.occurred_at.to_string(),
         event.authorization_id.clone(),
         event.authorized_at.to_string(),
+        event.currency.code().into(),
     ];
-    let inserted = statement(db, "INSERT INTO amail_usage_events(event_id,owner_id,period_start,period_end,meter,quantity,amount_micros,occurred_at,authorization_id,authorized_at) VALUES(?1,?2,CAST(?3 AS INTEGER),CAST(?4 AS INTEGER),?5,CAST(?6 AS INTEGER),CAST(?7 AS INTEGER),CAST(?8 AS INTEGER),NULLIF(?9,''),CAST(?10 AS INTEGER)) ON CONFLICT(event_id) DO NOTHING", &values)?.run().await;
+    let inserted = statement(db, "INSERT INTO amail_usage_events(event_id,owner_id,period_start,period_end,meter,quantity,amount_micros,occurred_at,authorization_id,authorized_at,currency) VALUES(?1,?2,CAST(?3 AS INTEGER),CAST(?4 AS INTEGER),?5,CAST(?6 AS INTEGER),CAST(?7 AS INTEGER),CAST(?8 AS INTEGER),NULLIF(?9,''),CAST(?10 AS INTEGER),?11) ON CONFLICT(event_id) DO NOTHING", &values)?.run().await;
     let inserted = match inserted {
         Ok(result) => result,
         Err(error) => {
@@ -180,15 +202,20 @@ async fn record(db: &D1Database, event: Usage) -> Result<Response> {
     };
     let replayed = inserted.meta()?.and_then(|meta| meta.changes) == Some(0);
     Response::from_json(&json!({"event_id":event.event_id,"owner_id":event.owner_id,
-        "amount_micros":event.amount_micros,"settlement_status":"pending_settlement","replayed":replayed}))
+        "currency":event.currency,"amount_micros":event.amount_micros,"settlement_status":"pending_settlement","replayed":replayed}))
 }
 
 /// Returns liabilities without exposing account identities, credentials, or paid-success claims.
-async fn summary(db: &D1Database, owner: &str, period: i64) -> Result<Response> {
+async fn summary(
+    db: &D1Database,
+    owner: &str,
+    period: i64,
+    currency: Currency,
+) -> Result<Response> {
     let binding = statement(
         db,
-        "SELECT CASE WHEN valid_until IS NOT NULL AND valid_until <= unixepoch() THEN 0 ELSE overage_budget_micros END AS overage_budget_micros FROM amail_bindings WHERE owner_id=?1",
-        &[owner.into()],
+        "SELECT CASE WHEN currency != ?2 OR (valid_until IS NOT NULL AND valid_until <= unixepoch()) THEN 0 ELSE overage_budget_micros END AS overage_budget_micros FROM amail_bindings WHERE owner_id=?1",
+        &[owner.into(), currency.code().into()],
     )?
     .first::<Binding>(None)
     .await?;
@@ -199,9 +226,9 @@ async fn summary(db: &D1Database, owner: &str, period: i64) -> Result<Response> 
             "Authorize amail billing first",
         );
     };
-    let totals = statement(db, "SELECT COALESCE(SUM(amount_micros),0) AS amount_micros,COUNT(*) AS events_count FROM amail_usage_events WHERE owner_id=?1 AND period_start=CAST(?2 AS INTEGER)", &[owner.into(), period.to_string()])?
+    let totals = statement(db, "SELECT COALESCE(SUM(amount_micros),0) AS amount_micros,COUNT(*) AS events_count FROM amail_usage_events WHERE owner_id=?1 AND period_start=CAST(?2 AS INTEGER) AND currency=?3", &[owner.into(), period.to_string(), currency.code().into()])?
         .first::<Totals>(None).await?.ok_or_else(|| Error::RustError("usage_aggregate_missing".into()))?;
-    let payload: Value = json!({"owner_id":owner,"period_start":period,"amount_micros":totals.amount_micros,
+    let payload: Value = json!({"owner_id":owner,"period_start":period,"currency":currency,"amount_micros":totals.amount_micros,
         "overage_budget_micros":binding.overage_budget_micros,"settlement_status":"pending_settlement","events_count":totals.events_count});
     Response::from_json(&payload)
 }
@@ -219,6 +246,9 @@ mod tests {
             "quantity":25_920_000_000_000_000_i64,"amount_micros":1,
             "authorization_id":"original-approval","authorized_at":140}))
             .unwrap();
+        assert!(event.valid());
+        assert_eq!(event.currency, Currency::Cny);
+        event.currency = Currency::Usd;
         assert!(event.valid());
         event.amount_micros = -1;
         assert!(!event.valid());

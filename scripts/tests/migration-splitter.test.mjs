@@ -26,7 +26,7 @@ test('pinned Wrangler splits every Billing and Subscribe migration into executab
 });
 
 test('new amail trigger guards avoid ambiguous CASE END statements at the D1 service boundary',()=>{
-  for(const file of ['0003_amail_authorizations.sql','0004_amail_usage.sql']) {
+  for(const file of ['0003_amail_authorizations.sql','0004_amail_usage.sql','0006_amail_usd.sql']) {
     const sql=migration('billing',file).replace(/--[^\n]*/g,'');
     assert.doesNotMatch(sql,/\bCASE\b/i,'Use SELECT RAISE WHERE guards instead of adding a second END to triggers');
     const triggers=unstable_splitSqlQuery(sql).filter(part=>/CREATE\s+TRIGGER/i.test(part));

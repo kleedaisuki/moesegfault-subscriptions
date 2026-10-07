@@ -16,13 +16,13 @@ function sql(prefix) {
 /** Produces two unrelated payers and access to the production SQL statements. */
 function fixture() {
   const db = new DatabaseSync(':memory:');
-  for (const name of ['0001_billing.sql', '0002_admin_issuance.sql', '0003_amail_authorizations.sql']) {
+  for (const name of ['0001_billing.sql', '0002_admin_issuance.sql', '0003_amail_authorizations.sql', '0004_amail_usage.sql', '0005_trace_spans.sql', '0006_amail_usd.sql']) {
     db.exec(readFileSync(new URL(`../../migrations/billing/${name}`, import.meta.url), 'utf8'));
   }
   db.exec(`INSERT INTO billing_accounts(id,issuer,subject,created_at,updated_at)
     VALUES('payer-a','issuer','a',1,1),('payer-b','issuer','b',1,1)`);
   const statement = db.prepare(sql('INSERT INTO'));
-  const insert = { run: (...args) => statement.run(...args, null, null) };
+  const insert = { run: (...args) => statement.run(...args, null, null, 'USD') };
   const approve = db.prepare(sql("UPDATE amail_authorizations SET status='approved'"));
   return { db, insert, approve };
 }

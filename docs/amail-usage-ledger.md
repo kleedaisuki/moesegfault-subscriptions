@@ -8,24 +8,24 @@ or alternate Identity subjects.
 ## Contract
 
 `POST /v1/service/amail/usage` takes an immutable event with `event_id`, `owner_id`,
-`period_start`, `period_end`, `meter`, `quantity`, `amount_micros`, and `occurred_at`.
+`period_start`, `period_end`, `meter`, `quantity`, `amount_micros`, `occurred_at`, and explicit `currency:"USD"` for new usage.
 Meters are `outbound_recipients`, `storage_byte_seconds`, and `address_seconds`.
-Amounts are integer millionths of CNY. amail owns incremental metering, included
+Amounts are integer millionths of their persisted CNY or USD denomination; one unit is 1,000,000 micros. Missing legacy wire currency remains CNY. No sum or budget spans denominations. amail owns incremental metering, included
 allowances, price calculations, and period selection; Billing owns durable
 acceptance and aggregate budget enforcement. Periods must not overlap for a given
-owner and cannot exceed 32 days. Observations may occur after the original period,
+owner and currency and cannot exceed 32 days. Observations may occur after the original period,
 as specified under historical consent below. A repeated event ID
 with an identical payload is a successful no-op; changing any field is a 409.
 
-The response includes `event_id`, `owner_id`, `amount_micros`, and
+The response includes `event_id`, `owner_id`, `currency`, `amount_micros`, and
 `settlement_status: "pending_settlement"`, and `replayed` (derived from the atomic
 write's affected-row count). This is **not** a payment receipt,
 credit balance, or claim that a charge has settled. No monetary payment provider
 is invoked by this ledger.
 
-`GET /v1/service/amail/accounts/{owner}/usage?period_start=...` returns
-`owner_id`, `period_start`, `amount_micros`, `overage_budget_micros`,
-`settlement_status`, and `events_count`. Unknown owners return 404.
+`GET /v1/service/amail/accounts/{owner}/usage?period_start=...&currency=USD` returns
+`owner_id`, `period_start`, `currency`, `amount_micros`, `overage_budget_micros`,
+`settlement_status`, and `events_count`. Unknown owners return 404. An unqualified legacy GET retains CNY semantics; explicit `currency=CNY` reads history. Unsupported/duplicate currencies are rejected. If the latest binding uses another denomination, the requested currency's current spending cap is zero, while its historical liabilities remain readable.
 
 ## Persistence and integer accuracy
 
@@ -37,7 +37,7 @@ Budget changes do not erase existing liabilities. Expired paid bindings expose a
 zero budget and cannot accrue new charges; accepted identical retries remain
 available after expiry. UPDATE and DELETE are blocked.
 Immutable event payload comparisons happen in SQL as well, including concurrent
-retries. Query and index scope is always owner plus period.
+retries. Query and index scope is always owner plus currency plus period.
 
 The accepted quantity bound is 10^18; amounts and binding budgets are bounded by
 10^12 micros. Timestamps are bounded through 2100. Storage byte-seconds commonly
@@ -50,7 +50,7 @@ producer cannot be repaired by the ledger.
 ## Verification
 
 Run `node --test scripts/tests/amail-usage.test.mjs`. The tests apply the actual
-0001–0004 migration chain to SQLite, approve a real authorization fixture through
+0001–0006 migration chain to SQLite, approve a real authorization fixture through
 the binding trigger, and exercise exact 25,920,000,000,000,001 byte-seconds,
 identical/conflicting replay, cumulative budget boundaries, missing approval,
 negative quantities, overlapping periods, independent subsequent periods,
@@ -71,8 +71,8 @@ no more than 300 seconds ahead of the service clock. Accounting remains on the o
 nonoverlapping period.
 
 Billing verifies that the receipt belongs to the owner, was approved by admission,
-was not expired at admission, and was not superseded before admission. All events for
-one owner/period share one cumulative liability sum; a historical event is bounded by
+was not expired at admission, and was not superseded by any newer approved receipt before admission, including a USD approval superseding CNY. Receipt and event currency must match. All events for
+one owner/currency/period share one cumulative liability sum; a historical event is bounded by
 its original receipt's cap, not a separate fresh cap per authorization. Thus lowering
 a cap prevents new spending but does not erase legitimate previously admitted backlog.
 Accepted event retries remain deterministic even if later consent changes.
@@ -80,6 +80,29 @@ Accepted event retries remain deterministic even if later consent changes.
 Real SQLite tests cover original-period stock at the boundary, late provider acceptance,
 historical admission after entitlement expiry, cap decreases with old reservations,
 new lower-cap denial, and prevention of quota reset through multiple receipts.
+
+## USD cutover verification (local, 2026-10-07)
+
+`node --test scripts/tests/amail-usd.test.mjs` applies real 0001–0004 SQL, creates
+six CNY fixture events totaling exactly 22 micros, then applies additive 0006 and
+compares every preexisting payload field. It extracts the current production Rust
+INSERT, approval and summary SQL, not a mock. Tests prove all of the following:
+
+- CNY history and consent denomination stay immutable; old pending CNY approval
+  is blocked, and only explicit fresh USD approval replaces binding currency.
+- USD spends its own complete cap without consuming the CNY sum; both summaries
+  remain independent. Opposite-currency current caps are zero.
+- Replay compares denomination; mismatched receipt/event currency is rejected.
+- Currency-local overlap checks preserve legitimate CNY liability admitted before a
+  USD approval; cross-currency receipt supersession denies new CNY admission after
+  that approval, without granting dollar spending from yuan.
+- Lowering a USD cap to zero preserves originally admitted USD backlog and rejects
+  new admission, while the original six CNY events remain 22 CNY micros.
+
+All 53 deployment/SQLite tests passed, including historical CNY lower-cap/expiry
+coverage under the replaced 0006 triggers and the real pinned Wrangler splitter.
+These are local fixture results, not a claim of deployed USD acceptance. The
+previous staging evidence below remains accurately labeled CNY.
 
 ## Actual staging liability acceptance (2026-10-07)
 
