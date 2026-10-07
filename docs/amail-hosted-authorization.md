@@ -22,7 +22,7 @@ The UI shows Free/Lite/Plus, the current Billing payer, explicit account-binding
 
 The only completion link currently accepted is exactly `https://amail-staging.moesegfault.dev/billing/return`, without added query or fragment. Completion is explicit navigation, never an automatic redirect or proof of payment. amail must poll its server-side Billing result. Production completion must be explicitly added when production is in scope.
 
-## Fixed USD cutover (2026-10-07; implementation, staging acceptance pending)
+## Fixed USD cutover (2026-10-07; deployed to staging)
 
 The owner-approved community tariff is Free $0, Lite $1.50, Plus $4.50 per month;
 excess accepted envelope recipients $0.001 each, decimal GB-months $0.15, and
@@ -90,7 +90,26 @@ Continuation state is in `subscribe_authorization_traces` (migration 0002), expi
 
 Verification: 15 native Subscribe tests passed, including stored-parent preference, malformed-context rejection, exact lookup route filtering and TTL. A SQLite migration probe verified hash-only persistence, lookup isolation and strict expiry.
 
-## Actual amail v0.2.0 staging acceptance (2026-10-07)
+## Actual fixed USD authorization acceptance (2026-10-07)
+
+[Staging delivery 37641220454](https://github.com/kleedaisuki/moesegfault-subscriptions/actions/runs/37641220454)
+passed at source `86bb06e70a9ba98153230ed25d185031d221e6c2`, including additive
+0006, native/domain/frontend gates, immutable deployment and capture-off readback.
+Billing serves `7a85d66d-b33a-42f2-bc30-5c6e1cafc2c4`; Subscribe serves
+`dd8b046a-8f9e-4c3a-9947-3cf96e6cffbb`.
+
+[Controlled USD acceptance 37644087065](https://github.com/kleedaisuki/moesegfault-amail/actions/runs/37644087065)
+passed real browser cancellation, explicit USD Lite approval, normal return-link
+navigation and authoritative native CLI projection. `grant_source=existing`:
+no activation code was reused or redeemed. The UI temporarily approved $0.50,
+then restored zero before usage delivery polling. Safe artifact `11494520444`
+records actual 2 USD micros across two delivered events, unchanged historical
+6 CNY events / 22 CNY micros, and validated human/CLI and asynchronous ancestry.
+That run later failed on a stale CNY assertion in the Mail probe; its monetary
+and authorization evidence is valid, but its overall mail journey is not green.
+No automatic payment, production deployment or Identity change was performed.
+
+## Historical CNY amail staging acceptance (2026-10-07)
 
 [Mail acceptance 37621170985](https://github.com/kleedaisuki/moesegfault-amail/actions/runs/37621170985)
 passed with native candidate source `de427af16097eff247ec33b831c829de89b56890`.

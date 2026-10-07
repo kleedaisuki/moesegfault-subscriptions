@@ -101,10 +101,30 @@ INSERT, approval and summary SQL, not a mock. Tests prove all of the following:
 
 All 53 deployment/SQLite tests passed, including historical CNY lower-cap/expiry
 coverage under the replaced 0006 triggers and the real pinned Wrangler splitter.
-These are local fixture results, not a claim of deployed USD acceptance. The
-previous staging evidence below remains accurately labeled CNY.
+These fixture results are distinct from actual deployment and USD acceptance
+recorded below; the earlier staging evidence remains accurately labeled CNY.
 
-## Actual staging liability acceptance (2026-10-07)
+## Actual USD staging liability acceptance (2026-10-07)
+
+Billing migration 0006 and source `86bb06e` deployed successfully in
+[37641220454](https://github.com/kleedaisuki/moesegfault-subscriptions/actions/runs/37641220454).
+[Controlled integrated run 37644087065](https://github.com/kleedaisuki/moesegfault-amail/actions/runs/37644087065)
+then generated 14 actual excess address-seconds through normal CLI allocation and
+retirement. All four task addresses were retired and the browser restored the
+temporary $0.50 cap to zero before the normal five-minute Cron delivered two
+events totaling 2 USD micros ($0.000002). No SQL event was seeded and no scheduler
+was manually invoked. Explicit separate historical reads still returned exactly
+6 CNY events / 22 CNY micros. Safe artifact `11494520444` contains aggregate
+currency/amount/count evidence and retained actual usage-client/server ancestry
+linked to one exact scheduled root.
+
+The run's later Mail assertion still expected CNY, so the overall run failed
+after successful authorization, metering and tracing. Fixing that harness must
+not repeat charged usage: preserve the accrued USD amount and existing CNY
+history, and exercise ordinary mail acceptance without metering confirmation.
+Both denominations remain `pending_settlement`, not collected payments.
+
+## Historical CNY staging liability acceptance (2026-10-07)
 
 [Integrated Mail acceptance 37630962022](https://github.com/kleedaisuki/moesegfault-amail/actions/runs/37630962022)
 passed against the existing staged Billing runtime `c77b7dd`. The normal browser

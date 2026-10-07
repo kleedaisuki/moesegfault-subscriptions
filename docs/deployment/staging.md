@@ -232,9 +232,9 @@ policy; no code/settings redeployment is needed just to alter normalized prefere
 values. The earlier strict-absence paragraph above is superseded by this evidence
 and contract, not by a relaxed assumption.
 
-## Accepted staged Billing/Subscribe runtime and privacy readback
+## Historical CNY Billing/Subscribe runtime and privacy readback
 
-As of 2026-10-07 12:01:57 UTC (20:01:57 UTC+8), the actual staged runtime is:
+As of 2026-10-07 12:01:57 UTC (20:01:57 UTC+8), the then-serving runtime was:
 
 | Component | Serving version (100%) | Runtime source |
 | --- | --- | --- |
@@ -284,3 +284,30 @@ A single legitimate Lite code had been received through the explicitly authorize
 owned amail mailbox and redeemed once; later runs used the existing grant and
 the temporary activation-code test secret was deleted. No production/Identity
 deployment or actual monetary collection was performed.
+
+
+## Current fixed USD staging runtime (2026-10-07)
+
+[USD delivery 37641220454](https://github.com/kleedaisuki/moesegfault-subscriptions/actions/runs/37641220454)
+completed **SUCCESS** with migration 0006, native/domain/frontend/security checks,
+immutable artifacts, both actual Worker deploys, capture-off version readbacks
+and public smoke. Original applied migrations and production configuration were
+not rewritten. The fixed USD tariff is not FX conversion.
+
+| Component | Current serving version (100%) | Runtime source |
+| --- | --- | --- |
+| Billing | `7a85d66d-b33a-42f2-bc30-5c6e1cafc2c4` | `86bb06e70a9ba98153230ed25d185031d221e6c2` |
+| Subscribe | `dd8b046a-8f9e-4c3a-9947-3cf96e6cffbb` | `86bb06e70a9ba98153230ed25d185031d221e6c2` |
+
+Actual integrated USD authorization/usage run
+[37644087065](https://github.com/kleedaisuki/moesegfault-amail/actions/runs/37644087065)
+passed real browser approval/return, native CLI USD projection, real address
+metering, normal Cron delivery and retained human/asynchronous ancestry. Safe
+artifact `11494520444` records 14 excess address-seconds, 2 USD micros in two
+delivered events, four retired metering addresses and zero restored budget.
+A separate CNY query still returned the original 6 events / 22 CNY micros.
+No activation code was redeemed again. The run later failed on an obsolete CNY
+expectation in Mail's status probe, so it is not an overall green mail acceptance
+run. A helper correction must complete the remaining ordinary mail journey
+without repeating charged usage. Neither ledger denomination is a payment
+receipt; settlement remains pending and no production/Identity writer was used.
