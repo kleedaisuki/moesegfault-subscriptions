@@ -41,5 +41,10 @@ for (const service of ['billing', 'subscribe']) {
   wrangler('d1', 'migrations', 'apply', `moesegfault-${service}-${target}`, '--remote', '--config', `wrangler.${service}${suffix}.jsonc`);
   wrangler('deploy', '--config', `wrangler.${service}${suffix}.jsonc`, '--tag', source.slice(0, 12), '--message', `Verified source ${source}`);
 }
+if (target === 'staging') {
+  const { verifyCaptureSettings } = await import('./deployment-capture-readback.mjs');
+  const capture = await verifyCaptureSettings({account: process.env.CLOUDFLARE_ACCOUNT_ID, token: process.env.CLOUDFLARE_API_TOKEN});
+  for (const result of capture) process.stdout.write(`Staging capture readback: ${JSON.stringify(result)}\n`);
+}
 process.env.DEPLOYMENT_SMOKE_TARGET = target;
 await import('./deployment-smoke.mjs');

@@ -47,6 +47,9 @@
     },
     "traces": {
       "enabled": false
+    },
+    "issues": {
+      "enabled": false
     }
   }
 }

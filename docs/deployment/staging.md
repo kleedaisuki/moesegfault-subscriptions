@@ -170,3 +170,25 @@ URLs, account identifiers, raw provider metadata, or browser-readable key is acc
 The staging provisioning helper now installs the same key on Billing and Subscribe.
 Binding `updated_at` is a strictly monotonic authority timestamp (may increment by
 one for same-second approvals), while `approved_at` retains actual UTC consent time.
+
+## Explicit independent Issues-off intent and authoritative readback
+
+The staging configuration now explicitly sets `observability.issues.enabled:false`
+for Billing and Subscribe, in addition to Logs and Traces off. Pinned Wrangler
+4.147.0's schema and actual `unstable_readConfig` accept and preserve the field.
+Global `observability.enabled:false` is not used as proof of independent Issues
+capture state. Production configuration is unchanged.
+
+The 3e2c4e8 staging code was observed serving Billing version
+`93fb7a25-3b2b-4643-acb9-f0cfdbdb5dca` and Subscribe version
+`92fae69f-65a4-443a-a4f8-7d482611de7c`, both at 100%. Version metadata omitted
+capture settings, so it does not establish that Issues was off.
+
+After deployment, the staging pipeline now reads exact current Worker resources,
+legacy settings, and script-settings from the fixed Cloudflare API origin using
+its existing environment credential. It brackets these reads with unchanged 100%
+serving deployment IDs, requires explicit independent Issues=false (absence is
+unverified for this acceptance gate), and prints only sanitized capture flags and
+immutable version IDs. Responses stay bounded and in memory; no raw provider body,
+binding, secret, or header is printed. No local credential-cache extraction or
+extra writer is used. Human OAuth callback acceptance must await this positive gate.
