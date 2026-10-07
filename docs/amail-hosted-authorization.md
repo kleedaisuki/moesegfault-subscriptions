@@ -130,3 +130,25 @@ Billing and Subscribe remain the staging runtime versions recorded in
 `docs/deployment`; no production deployment or Identity-sector change was made.
 This proves subscription authorization and entitlement projection, not payment
 collection: existing activation grants and usage accrual remain the Billing model.
+
+
+## Final ordinary USD mail acceptance
+
+[37646418030](https://github.com/kleedaisuki/moesegfault-amail/actions/runs/37646418030)
+completed **SUCCESS** with exact Mail candidate `aae6029` and successful producer
+`37645057615` (CLI/Skill bundle `11493832761`). Safe artifact `11495350924` records
+explicit USD Lite authorization, cancellation/return, authoritative CLI projection,
+14 retained human/CLI spans and `grant_source=existing`. The journey also passed
+actual SMTP/archive/search/read/delete, exact address/route cleanup and controlled
+self-send receipt recovery/same-key replay/delivery-feedback/inbound. Metering
+confirmation was deliberately omitted; the existing USD liability was not repeated.
+The separate actual monetary/asynchronous proof remains artifact `11494520444`
+from the earlier run `37644087065`, which is not relabeled overall successful.
+
+[Final fixed readback 37646496526](https://github.com/kleedaisuki/moesegfault-amail/actions/runs/37646496526)
+confirmed USD 2 micros / 2 events and unchanged CNY 22 micros / 6 events, all
+outbox deliveries acknowledged, eight retained usage servers HTTP200/success,
+zero current cap and zero registered addresses. No currency balance was converted,
+combined or erased. Billing/Subscribe serving versions and runtime source `86bb06e`
+remain unchanged by documentation commits. Settlement is still pending; no
+production/Identity deployment or automatic monetary collection occurred.
