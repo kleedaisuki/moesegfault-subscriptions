@@ -33,8 +33,9 @@ CREATE TABLE amail_bindings (
 CREATE TRIGGER amail_authorization_bind AFTER UPDATE OF status ON amail_authorizations
 WHEN NEW.status='approved' AND OLD.status='pending'
 BEGIN
-  SELECT CASE WHEN EXISTS(SELECT 1 FROM amail_bindings WHERE owner_id=NEW.owner_id AND account_id<>NEW.account_id)
-    THEN RAISE(ABORT,'amail_payer_conflict') END;
+  SELECT RAISE(ABORT,'amail_payer_conflict') WHERE EXISTS(
+    SELECT 1 FROM amail_bindings WHERE owner_id=NEW.owner_id AND account_id<>NEW.account_id
+  );
   INSERT INTO amail_bindings(owner_id,account_id,plan_id,overage_budget_micros,authorization_id,valid_until,entitlements_json,updated_at)
   VALUES(NEW.owner_id,NEW.account_id,NEW.plan_id,NEW.overage_budget_micros,NEW.id,NEW.valid_until,NEW.entitlements_json,NEW.approved_at)
   ON CONFLICT(owner_id) DO UPDATE SET plan_id=excluded.plan_id,

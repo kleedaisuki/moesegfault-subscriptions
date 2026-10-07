@@ -33,6 +33,11 @@ function wrangler(...args) {
 }
 
 for (const service of ['billing', 'subscribe']) {
+  if (target === 'staging' && service === 'billing') {
+    // Names-only readback makes failed migration recovery visible before any new schema writes.
+    wrangler('d1', 'execute', 'moesegfault-billing-staging', '--remote', '--config', 'wrangler.billing.jsonc',
+      '--command', "SELECT name FROM d1_migrations ORDER BY id; SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'amail_%' ORDER BY name;", '--json');
+  }
   wrangler('d1', 'migrations', 'apply', `moesegfault-${service}-${target}`, '--remote', '--config', `wrangler.${service}${suffix}.jsonc`);
   wrangler('deploy', '--config', `wrangler.${service}${suffix}.jsonc`, '--tag', source.slice(0, 12), '--message', `Verified source ${source}`);
 }
