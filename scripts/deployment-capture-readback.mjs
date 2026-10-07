@@ -22,11 +22,14 @@ function serving(value){
   return {deployment_id:current.id,version_id:versions[0].version_id};
 }
 
-/** Current-resource capture switches must be explicit, including the independent Issues subsystem. */
+/** Require explicit root/Logs/Traces off; only the documented opt-in Issues section may be absent. */
 function flags(value){
-  if(!value || value.enabled!==false || value.logs?.enabled!==false || value.logs?.invocation_logs!==false || value.traces?.enabled!==false || value.issues?.enabled!==false)throw new Error('Staging capture-off policy unverified.');
+  if(!value || value.enabled!==false || value.logs?.enabled!==false || value.traces?.enabled!==false)throw new Error('Staging capture-off policy unverified.');
+  const issuesAbsent=!Object.hasOwn(value,'issues');
+  if(!issuesAbsent && value.issues?.enabled!==false)throw new Error('Staging independent Issues capture unverified.');
+  if(value.logs.invocation_logs!=null && typeof value.logs.invocation_logs!=='boolean')throw new Error('Staging invocation preference unverified.');
   for(const section of [value.logs,value.traces])if(section.destinations?.some(v=>v!=='cloudflare'))throw new Error('Staging capture exports unverified.');
-  return {enabled:false,logs:false,invocation_logs:false,traces:false,issues:false};
+  return {enabled:false,logs:false,invocation_logs:value.logs.invocation_logs??'missing',traces:false,issues:issuesAbsent?'disabled_by_optin_absence':false};
 }
 
 /** Partial legacy views cannot contradict the authoritative exact current Worker resource. */

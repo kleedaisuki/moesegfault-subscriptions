@@ -192,3 +192,42 @@ unverified for this acceptance gate), and prints only sanitized capture flags an
 immutable version IDs. Responses stay bounded and in memory; no raw provider body,
 binding, secret, or header is printed. No local credential-cache extraction or
 extra writer is used. Human OAuth callback acceptance must await this positive gate.
+
+## Provider normalization: precise canonical privacy interpretation (2026-10-07)
+
+The c77 staging delivery `37617117905` deployed the reviewed source but failed an
+incorrectly strict metadata gate. The independent, pure-read run `37617624810`
+then bracketed the same serving versions and reported these exact safe values for
+both current Worker resources: root enabled=false, Logs enabled=false,
+invocation_logs=true, Traces enabled=false, and Issues missing. Both legacy views
+omitted all five fields. The current versions remained Billing
+`2fa3e271-3e93-4b03-a67d-2332f14f0e1d` and Subscribe
+`f4682841-2008-4a0f-8b6e-9016c64ca9ca`. No writer ran during diagnosis.
+
+This is not a generic missing=false inference. Cloudflare's official
+[Issues enablement contract](https://developers.cloudflare.com/workers/observability/issues/)
+requires explicitly enabling Issues and says deploying without
+`observability.issues.enabled=true` turns it off. The opt-in Issues **section**
+being absent on the exact current resource therefore means off; a present Issues
+section with an unknown or true enabled field still fails. Source configuration
+continues to explicitly set Issues=false. Root, Logs and Traces must each be
+explicitly false on the current resource; missing values there always fail.
+
+The independently established Mail canonical implementation is
+`D:/Code/moesegfault-amail/crates/mail-worker/check_observability.py`:
+`capture_disabled`, lines 68–117, accepts only the absent opt-in Issues section,
+and `effective_api_settings`, lines 144–165, requires the exact current resource
+and noncontradictory legacy views. A disabled Logs subsystem cannot emit retained
+invocation logs; invocation_logs=true is only an inactive preference and is
+reported truthfully, not rewritten false. The official
+[Workers Logs enablement contract](https://developers.cloudflare.com/workers/observability/logs/workers-logs/)
+requires enabling observability for logs to be written. This interpretation is
+valid only with explicit root=false and Logs=false, never as a substitute for
+those switches or as a way to accept active logging.
+
+The reader now matches that precise canonical policy and adds tests rejecting
+Issues=true, a present unknown Issues section, missing root/Logs/Traces, and Logs
+on. A pure-read verification run must establish the unchanged versions under this
+policy; no code/settings redeployment is needed just to alter normalized preference
+values. The earlier strict-absence paragraph above is superseded by this evidence
+and contract, not by a relaxed assumption.

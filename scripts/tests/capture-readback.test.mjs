@@ -42,10 +42,10 @@ test('metadata readback emits only closed flags and version IDs using fixed read
   assert.ok(!JSON.stringify(rows).includes('synthetic-token'));
 });
 
-test('missing or enabled independent Issues is unverified, never inferred from global disabled',async()=>{
-  for(const issues of [undefined,{enabled:true}]){
+test('present unknown or enabled independent Issues is unverified, never inferred from global disabled',async()=>{
+  for(const issues of [{},{enabled:true}]){
     const {fetcher}=provider(row=>{if(row.observability)row.observability.issues=issues;});
-    await assert.rejects(()=>verifyCaptureSettings({account,token:'synthetic-token',fetcher}),/policy unverified/);
+    await assert.rejects(()=>verifyCaptureSettings({account,token:'synthetic-token',fetcher}),/Issues capture unverified/);
   }
 });
 
@@ -75,4 +75,18 @@ test('read-only diagnosis preserves missing flags for all three sources without 
   assert.ok(job.includes('node scripts/deployment-capture-diagnose.mjs'));
   assert.ok(!job.includes('deploy:staging')&&!job.includes('npm ci')&&!job.includes('worker-build'));
   assert.equal((workflow.match(/inputs.delivery != 'capture-readback-only'/g)||[]).length,3);
+});
+
+
+test('documented Issues section absence is off only with explicit root Logs and Traces disabled',async()=>{
+  const {fetcher}=provider(row=>{if(row.observability){delete row.observability.issues;row.observability.logs.invocation_logs=true;}});
+  const rows=await verifyCaptureSettings({account,token:'synthetic-token',fetcher});
+  assert.equal(rows[0].capture.issues,'disabled_by_optin_absence');
+  assert.equal(rows[0].capture.invocation_logs,true,'Preference is reported as observed, not rewritten false');
+  for(const missing of ['enabled','logs','traces']){
+    const unsafe=provider(row=>{if(row.observability){delete row.observability[missing];delete row.observability.issues;}});
+    await assert.rejects(()=>verifyCaptureSettings({account,token:'synthetic-token',fetcher:unsafe.fetcher}),/policy unverified/);
+  }
+  const logsOn=provider(row=>{if(row.observability){row.observability.logs.enabled=true;delete row.observability.issues;}});
+  await assert.rejects(()=>verifyCaptureSettings({account,token:'synthetic-token',fetcher:logsOn.fetcher}),/policy unverified/);
 });
