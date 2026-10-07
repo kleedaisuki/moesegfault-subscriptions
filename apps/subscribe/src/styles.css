@@ -102,3 +102,11 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 @media (max-width: 700px) { .app-shell { padding: 0 18px; } .site-header { padding: 20px 0; flex-wrap: wrap; gap: 16px; } .header-controls { gap: 8px; margin-left: auto; } .brand { font-size: 14px; } .brand-mark { width: 38px; height: 38px; } select { max-width: 115px; font-size: 12px; padding: 7px; } .hero { grid-template-columns: 1fr; padding: 40px 0 30px; } .hero-art { display: none; } .hero-description { max-width: 100%; } .content-grid { grid-template-columns: 1fr; } .catalog { margin-top: 12px; } .plan-card { padding: 22px; } .form-grid { gap: 15px; } .form-footer { align-items: flex-start; flex-direction: column; gap: 10px; } .steps { gap: 13px; } }
 @media (max-width: 420px) { .header-controls { width: 100%; justify-content: flex-end; } .form-grid { grid-template-columns: 1fr; } .field-wide { grid-column: auto; } .panel { padding: 20px 16px; } .code-controls { flex-direction: column; } .code-controls button { align-self: flex-start; } h1 { font-size: 34px; } .subscription-row { align-items: flex-start; } }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { animation: none !important; transition: none !important; } }
+/* Hosted consent uses the same platform tokens and mobile layout as the portal. */
+.authorization-shell { max-width: 860px; }
+.authorization-panel { margin: 32px 0; }
+.authorization-panel h1 { font-size: clamp(28px, 5vw, 40px); }
+.authorization-panel fieldset { border: 1px solid var(--moe-border); border-radius: 12px; padding: 20px; }
+.authorization-panel select, .authorization-panel input:not([type="checkbox"]) { display: block; margin: 8px 0 18px; width: 100%; box-sizing: border-box; }
+.consent-check { display: flex; align-items: start; gap: 12px; margin-top: 20px; }
+.consent-check input { margin-top: 5px; flex-shrink: 0; }

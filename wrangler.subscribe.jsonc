@@ -6,21 +6,51 @@
   "workers_dev": false,
   "preview_urls": false,
   "minify": true,
-  "routes": [{ "pattern": "subscribe-staging.moesegfault.dev", "custom_domain": true }],
+  "routes": [
+    {
+      "pattern": "subscribe-staging.moesegfault.dev",
+      "custom_domain": true
+    }
+  ],
   "assets": {
-    "directory": "./apps/subscribe/dist", "binding": "ASSETS",
-    "not_found_handling": "single-page-application", "run_worker_first": true
+    "directory": "./apps/subscribe/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true
   },
   "vars": {
-    "ENVIRONMENT": "staging", "ISSUER": "https://identity-staging.moesegfault.dev",
-    "CLIENT_ID": "subscribe-staging", "CLIENT_KEY_ID": "subscribe-staging-20261004",
-    "APP_ORIGIN": "https://subscribe-staging.moesegfault.dev", "ACCOUNT_ORIGIN": "https://account-staging.moesegfault.dev",
+    "ENVIRONMENT": "staging",
+    "ISSUER": "https://identity-staging.moesegfault.dev",
+    "CLIENT_ID": "subscribe-staging",
+    "CLIENT_KEY_ID": "subscribe-staging-20261004",
+    "APP_ORIGIN": "https://subscribe-staging.moesegfault.dev",
+    "ACCOUNT_ORIGIN": "https://account-staging.moesegfault.dev",
     "RETURN_URL_ALLOWLIST": "[\"https://account-staging.moesegfault.dev/subscriptions\"]"
   },
-  "d1_databases": [{
-    "binding": "SESSIONS", "database_name": "moesegfault-subscribe-staging",
-    "database_id": "8c2435df-3dcd-4bc8-a6ee-9798fa150a96", "migrations_dir": "migrations/subscribe"
-  }],
-  "services": [{ "binding": "BILLING", "service": "moesegfault-billing-staging" }],
-  "observability": { "enabled": true, "redact_query_string": true, "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false } }
+  "d1_databases": [
+    {
+      "binding": "SESSIONS",
+      "database_name": "moesegfault-subscribe-staging",
+      "database_id": "8c2435df-3dcd-4bc8-a6ee-9798fa150a96",
+      "migrations_dir": "migrations/subscribe"
+    }
+  ],
+  "services": [
+    {
+      "binding": "BILLING",
+      "service": "moesegfault-billing-staging"
+    }
+  ],
+  "observability": {
+    "enabled": false,
+    "redact_query_string": true,
+    "logs": {
+      "enabled": false,
+      "head_sampling_rate": 1,
+      "invocation_logs": false
+    },
+    "traces": {
+      "enabled": false
+    }
+  }
 }

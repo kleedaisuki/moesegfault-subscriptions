@@ -17,5 +17,71 @@
     "entitlements": [
       "platform.access"
     ]
+  },
+  {
+    "id": "amail-free",
+    "product_id": "amail",
+    "name": {
+      "en": "amail Free",
+      "ja": "amail Free",
+      "zh-CN": "amail Free"
+    },
+    "description": {
+      "en": "Community email plan. Inbound mail and semantic search are unmetered; authorized overage accrues pending settlement.",
+      "ja": "コミュニティメール。受信と意味検索は無料。承認済み超過利用は未決済として記録されます。",
+      "zh-CN": "社区邮件套餐。收信与语义搜索不计费；超额用量需用户授权，待结算。"
+    },
+    "duration_days": 30,
+    "active": true,
+    "entitlements": [
+      "amail.plan.free",
+      "amail.outbound.monthly.100",
+      "amail.storage.bytes.200000000",
+      "amail.addresses.1"
+    ]
+  },
+  {
+    "id": "amail-lite",
+    "product_id": "amail",
+    "name": {
+      "en": "amail Lite",
+      "ja": "amail Lite",
+      "zh-CN": "amail Lite"
+    },
+    "description": {
+      "en": "Community email plan. Inbound mail and semantic search are unmetered; authorized overage accrues pending settlement.",
+      "ja": "コミュニティメール。受信と意味検索は無料。承認済み超過利用は未決済として記録されます。",
+      "zh-CN": "社区邮件套餐。收信与语义搜索不计费；超额用量需用户授权，待结算。"
+    },
+    "duration_days": 30,
+    "active": true,
+    "entitlements": [
+      "amail.plan.lite",
+      "amail.outbound.monthly.1000",
+      "amail.storage.bytes.2000000000",
+      "amail.addresses.3"
+    ]
+  },
+  {
+    "id": "amail-plus",
+    "product_id": "amail",
+    "name": {
+      "en": "amail Plus",
+      "ja": "amail Plus",
+      "zh-CN": "amail Plus"
+    },
+    "description": {
+      "en": "Community email plan. Inbound mail and semantic search are unmetered; authorized overage accrues pending settlement.",
+      "ja": "コミュニティメール。受信と意味検索は無料。承認済み超過利用は未決済として記録されます。",
+      "zh-CN": "社区邮件套餐。收信与语义搜索不计费；超额用量需用户授权，待结算。"
+    },
+    "duration_days": 30,
+    "active": true,
+    "entitlements": [
+      "amail.plan.plus",
+      "amail.outbound.monthly.5000",
+      "amail.storage.bytes.10000000000",
+      "amail.addresses.5"
+    ]
   }
 ]

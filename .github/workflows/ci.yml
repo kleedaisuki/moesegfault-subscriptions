@@ -149,11 +149,13 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          AMAIL_SERVICE_KEY: ${{ secrets.AMAIL_SERVICE_KEY }}
         run: |
           test -n "$CLOUDFLARE_API_TOKEN" || { echo 'Configure cloudflare-staging CLOUDFLARE_API_TOKEN'; exit 1; }
           (cd .temp/release && sha256sum -c staging.tar.gz.sha256)
           test "$(cat .temp/release/source-revision.txt)" = '${{ github.sha }}'
           tar -xzf .temp/release/staging.tar.gz
+          node scripts/deployment-amail-secret.mjs
           npm run deploy:staging
 
   production:

@@ -2,9 +2,12 @@
 #![forbid(unsafe_code)]
 
 mod admin;
+mod amail;
+mod amail_usage;
 pub mod auth;
 pub mod domain;
 mod repository;
+mod telemetry;
 
 use serde::Deserialize;
 use serde_json::json;
@@ -18,7 +21,10 @@ pub async fn fetch(request: Request, env: Env, _context: Context) -> Result<Resp
 }
 
 /// Dispatches API operations and applies non-cacheable, nosniff response policy.
-pub async fn serve(mut request: Request, env: Env) -> Result<Response> {
+pub async fn serve(request: Request, env: Env) -> Result<Response> {
+    let mut request = request.clone_mut()?;
+    request.headers_mut()?.delete("x-billing-authenticated")?;
+    let started_at_ms = worker::Date::now().as_millis();
     let response = route(&mut request, &env).await.unwrap_or_else(|_| {
         problem(500, "internal_error", "Billing is temporarily unavailable").unwrap()
     });
@@ -31,6 +37,7 @@ pub async fn serve(mut request: Request, env: Env) -> Result<Response> {
     response
         .headers_mut()
         .set("x-moesegfault-correlation-id", &correlation)?;
+    let _ = telemetry::finish(&request, &mut response, started_at_ms, &env).await;
     Ok(response)
 }
 
@@ -38,6 +45,9 @@ pub async fn serve(mut request: Request, env: Env) -> Result<Response> {
 async fn route(request: &mut Request, env: &Env) -> Result<Response> {
     let path = request.url()?.path().to_owned();
     let method = request.method();
+    if path.starts_with("/v1/service/amail/") {
+        return amail::service_route(request, env, &path).await;
+    }
     if method == Method::Get && path == "/healthz" {
         return Response::from_json(&json!({"status":"ok"}));
     }
@@ -47,12 +57,14 @@ async fn route(request: &mut Request, env: &Env) -> Result<Response> {
     if method == Method::Post && path == "/v1/admin/activation-codes" {
         return admin::issue(request, env).await;
     }
-    if !matches!(
-        (method.clone(), path.as_str()),
-        (Method::Get, "/v1/me")
-            | (Method::Put, "/v1/me/profile")
-            | (Method::Post, "/v1/activations")
-    ) {
+    if !path.starts_with("/v1/authorizations/")
+        && !matches!(
+            (method.clone(), path.as_str()),
+            (Method::Get, "/v1/me")
+                | (Method::Put, "/v1/me/profile")
+                | (Method::Post, "/v1/activations")
+        )
+    {
         return problem(404, "not_found", "Not found");
     }
     let principal = match auth::verify(request, env).await {
@@ -86,6 +98,11 @@ async fn route(request: &mut Request, env: &Env) -> Result<Response> {
             );
         }
     };
+    request.headers_mut()?.set("x-billing-authenticated", "1")?;
+    if path.starts_with("/v1/authorizations/") {
+        return amail::browser_route(request, env, &path, &principal.issuer, &principal.subject)
+            .await;
+    }
     let db = env.d1("BILLING_DB")?;
     let account = repository::ensure_account(&db, &principal.issuer, &principal.subject).await?;
     if method == Method::Get {
@@ -169,6 +186,7 @@ pub(crate) fn problem(status: u16, code: &str, title: &str) -> Result<Response> 
     response
         .headers_mut()
         .set("Content-Type", "application/problem+json")?;
+
     Ok(response)
 }
 

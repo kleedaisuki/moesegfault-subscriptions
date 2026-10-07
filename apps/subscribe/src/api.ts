@@ -56,9 +56,19 @@ export class ApiError extends Error {
   }
 }
 
+/** Per-page trace root is memory-only and contains no account or authorization identifiers. */
+let pageTraceId: string | undefined;
+
+/** Fresh client span for each request, grouped under the current page's trace root. */
+export function browserTraceparent(): string {
+  const hex = (size: number) => Array.from(crypto.getRandomValues(new Uint8Array(size)), byte => byte.toString(16).padStart(2, '0')).join('');
+  pageTraceId ??= hex(16);
+  return `00-${pageTraceId}-${hex(8)}-01`;
+}
+
 /** Same-origin requests never store or forward bearer tokens in the browser. */
 export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(path, { ...options, credentials: 'same-origin', headers: { Accept: 'application/json', ...options.headers } });
+  const response = await fetch(path, { ...options, credentials: 'same-origin', headers: { Accept: 'application/json', traceparent: browserTraceparent(), ...options.headers } });
   if (!response.ok) {
     const problem = await response.json().catch(() => ({}));
     throw new ApiError(response.status, problem.error_code ?? problem.code ?? problem.error ?? 'request_failed', response.headers.get('x-moesegfault-correlation-id') ?? undefined);
@@ -78,14 +88,17 @@ export function mutate<T>(path: string, method: string, csrfToken: string, body?
 }
 
 /** Forward integration hints to the BFF; only it validates the continuation. */
-export function loginPath(search: string): string {
+export function loginPath(search: string, pathname = "/"): string {
   const input = new URLSearchParams(search);
   const output = new URLSearchParams();
   for (const key of ['app', 'plan', 'return_to']) {
     const value = input.get(key);
     if (value) output.set(key, value);
   }
-  if (input.get('embedded') === '1') {
+  if (/^\/amail\/authorize\/[A-Za-z0-9_-]{24,128}$/.test(pathname)) {
+    output.set('path', pathname);
+  }
+  if (input.get('embedded') === '1' && !pathname.startsWith('/amail/authorize/')) {
     output.set('path', '/account');
     output.set('embedded', '1');
     for (const key of ['locale', 'theme']) {

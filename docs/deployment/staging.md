@@ -128,3 +128,45 @@ activation → subscription reload acceptance journey.
   explicit rather than treating caching as automatically effective. Record actual
   first and subsequent hosted build durations after rollout; tune only the
   measured critical path.
+
+## amail v0.2.0 staging authorization bridge
+
+The candidate adds Billing migrations 0003/0004, staged amail plan catalog, and the
+Subscribe hosted route `/amail/authorize/{opaque_handle}`. It does not change
+Identity registrations, the existing amail subject sector, or production resources.
+
+Before deploying, provision the same random dedicated credential in:
+
+- subscriptions GitHub environment `cloudflare-staging`: `AMAIL_SERVICE_KEY`;
+- amail staging environment: `BILLING_SERVICE_KEY`.
+
+The repository-local ignored source is `.secrets/amail-service.staging.key`.
+Never print its contents. `node scripts/deployment-amail-secret.mjs` provisions only
+staging Billing, with stdin transport and suppressed child/disk logs; the staging
+CI release runs the same helper with its environment secret. Production does not
+receive this secret or change catalog/consent policy automatically.
+
+Approval is a real authenticated human action, and paid grants require an actual
+activation code. Usage events accrue immutable liabilities with `pending_settlement`;
+there is no payment-provider or recurring debit integration. The API and user UI
+must preserve this distinction. See `amail-hosted-authorization.md` and
+`amail-usage-ledger.md` for exact boundaries and local acceptance evidence.
+
+### HTTP trace retention boundary
+
+Billing and Subscribe HTTP producer Cloudflare Logs and native Traces are disabled
+on staging. Query-string redaction alone cannot protect opaque authorization IDs in
+paths from provider log wrappers. Closed spans therefore persist directly in the
+respective D1 databases; no HTTP console logger or raw request context is retained.
+Rows have a seven-day logical retention target; every insert performs bounded
+128-row expiry cleanup, and reads exclude expired rows even when idle cleanup lags.
+Span insertion failure is best effort and cannot change a committed business response.
+
+Both services expose the fixed, machine-only `POST /v1/service/amail/trace-query`
+with `Authorization: Bearer <AMAIL_SERVICE_KEY>` and JSON `{trace_id}`. Responses are
+`{schema_version:1,spans:[...]}`, with the closed 12-field envelope and at most 128
+rows; query requests do not create trace storage recursively. No arbitrary filters,
+URLs, account identifiers, raw provider metadata, or browser-readable key is accepted.
+The staging provisioning helper now installs the same key on Billing and Subscribe.
+Binding `updated_at` is a strictly monotonic authority timestamp (may increment by
+one for same-second approvals), while `approved_at` retains actual UTC consent time.
