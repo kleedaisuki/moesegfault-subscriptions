@@ -54,3 +54,25 @@ The first authenticated authorization GET receives Billing's validated response 
 Continuation state is in `subscribe_authorization_traces` (migration 0002), expires after 30 minutes and uses bounded 128-row cleanup. Only successful authenticated GET responses to the exact Billing authorization lookup route establish or refresh context. Reads and writes are best-effort: missing state or D1 errors fall back to normal browser/new-root tracing without changing authorization behavior. Billing must preserve an incoming trace when its trace ID already matches its stored creation trace; otherwise it restores its original creation ancestor. The initial cross-trace GET is a handoff boundary, while the later approval forms a fully parent-linked chain.
 
 Verification: 15 native Subscribe tests passed, including stored-parent preference, malformed-context rejection, exact lookup route filtering and TTL. A SQLite migration probe verified hash-only persistence, lookup isolation and strict expiry.
+
+## Actual amail v0.2.0 staging acceptance (2026-10-07)
+
+[Mail acceptance 37621170985](https://github.com/kleedaisuki/moesegfault-amail/actions/runs/37621170985)
+passed with native candidate source `de427af16097eff247ec33b831c829de89b56890`.
+The protected synthetic identity completed real login, cancellation, Lite approval,
+normal return-link navigation, authoritative CLI receipt and Lite projection.
+A preceding legitimate administrator-issued `amail-lite` code was received through
+the explicitly authorized owned amail mailbox and redeemed once in
+[37619968691](https://github.com/kleedaisuki/moesegfault-amail/actions/runs/37619968691).
+An independent fixed read-only issuance/redemption join confirmed exactly one
+redemption; the temporary test secret was deleted. The successful later run used
+`grant_source=existing`, not a reusable code.
+
+Safe artifact `11482721812` contains 14 validated retained spans connecting
+CLI to Mail to Billing and the real Subscribe approval ancestry. It contains no
+authorization URL, code, mail content or principal. The same run passed actual
+SMTP/archive/search/delete and controlled self-send recovery/delivery acceptance.
+Billing and Subscribe remain the staging runtime versions recorded in
+`docs/deployment`; no production deployment or Identity-sector change was made.
+This proves subscription authorization and entitlement projection, not payment
+collection: existing activation grants and usage accrual remain the Billing model.

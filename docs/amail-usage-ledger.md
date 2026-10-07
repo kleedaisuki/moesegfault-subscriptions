@@ -13,7 +13,8 @@ Meters are `outbound_recipients`, `storage_byte_seconds`, and `address_seconds`.
 Amounts are integer millionths of CNY. amail owns incremental metering, included
 allowances, price calculations, and period selection; Billing owns durable
 acceptance and aggregate budget enforcement. Periods must not overlap for a given
-owner, cannot exceed 32 days, and include the event timestamp. A repeated event ID
+owner and cannot exceed 32 days. Observations may occur after the original period,
+as specified under historical consent below. A repeated event ID
 with an identical payload is a successful no-op; changing any field is a 409.
 
 The response includes `event_id`, `owner_id`, `amount_micros`, and
@@ -29,7 +30,8 @@ is invoked by this ledger.
 ## Persistence and integer accuracy
 
 Migration `0004_amail_usage.sql` enforces cumulative period charges against the
-binding's current budget in a BEFORE INSERT trigger. This executes atomically
+applicable immutable human receipt in a BEFORE INSERT trigger. Current receipt
+budgets govern new admissions; legitimate older backlog retains its original cap. This executes atomically
 under SQLite's writer lock, so parallel writes cannot each spend the same budget.
 Budget changes do not erase existing liabilities. Expired paid bindings expose a
 zero budget and cannot accrue new charges; accepted identical retries remain
