@@ -80,3 +80,27 @@ Accepted event retries remain deterministic even if later consent changes.
 Real SQLite tests cover original-period stock at the boundary, late provider acceptance,
 historical admission after entitlement expiry, cap decreases with old reservations,
 new lower-cap denial, and prevention of quota reset through multiple receipts.
+
+## Actual staging liability acceptance (2026-10-07)
+
+[Integrated Mail acceptance 37630962022](https://github.com/kleedaisuki/moesegfault-amail/actions/runs/37630962022)
+passed against the existing staged Billing runtime `c77b7dd`. The normal browser
+Manage UI approved a temporary 3 CNY ceiling for the protected synthetic identity;
+normal CLI allocation/retirement generated seven real excess address-seconds and
+seven new CNY micros. The UI restored zero budget before polling. Normal Cron,
+not seeded SQL usage or a manual scheduler invocation, delivered the events.
+
+[Final fixed readback 37634410400](https://github.com/kleedaisuki/moesegfault-amail/actions/runs/37634410400)
+confirmed six immutable events and exactly 22 CNY micros in both Mail and Billing,
+all outbox delivery markers present, zero current budget and zero registered
+addresses. This includes three preserved earlier liabilities totaling 15 micros
+that survived later consent reductions. All six actual retained Billing usage
+server spans reported HTTP 200/success. Safe integration artifact `11486684051`
+additionally proves actual human/CLI ancestry and successful asynchronous usage
+client/server parentage linked to the separately retained scheduled root.
+
+The initial Mail maintenance configuration lacked its required issuer; the
+fixture had masked that mismatch. A maintenance-only staging repair plus
+config-derived regression fixed the producer without redeploying Billing or
+editing the preserved outbox. The ledger still reports `pending_settlement`;
+none of this is a monetary payment receipt or automatic debit.

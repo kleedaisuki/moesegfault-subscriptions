@@ -264,3 +264,23 @@ HTML/CSP, guest session and authenticated-boundary rejection. This establishes
 hosted runtime/readback readiness, not the final amail → human authorization →
 mail usage → retained trace end-to-end acceptance, which is owned by the integrated
 amail delivery run. No production or Identity deployment was performed.
+
+### Final integrated amail acceptance
+
+[37630962022](https://github.com/kleedaisuki/moesegfault-amail/actions/runs/37630962022)
+finished successfully on 2026-10-07 with exact Mail candidate `d1291b8`; Billing
+and Subscribe continued serving the versions above. It completed real human
+subscription cancellation/approval/return, authoritative CLI projection, positive
+address overage with zero-budget restoration, normal scheduled delivery, retained
+human and asynchronous ancestry, actual SMTP/archive/search/delete and controlled
+self-send recovery/replay/delivery feedback. Safe artifact `11486684051` contains
+no activation material, authorization URLs, mail content or principals.
+
+The final fixed readback `37634410400` confirmed six usage events and 22 CNY micros
+in both Mail and Billing, with every outbox delivery marker present, zero budget
+and zero registered addresses. Original historical liabilities were accepted after
+cap reduction under their valid original receipts. Normal Cron/backoff was retained.
+A single legitimate Lite code had been received through the explicitly authorized
+owned amail mailbox and redeemed once; later runs used the existing grant and
+the temporary activation-code test secret was deleted. No production/Identity
+deployment or actual monetary collection was performed.
