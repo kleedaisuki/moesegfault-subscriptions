@@ -60,3 +60,19 @@ test('staging pipeline verifies independent capture settings after deploy and be
   assert.ok(release.indexOf("await import('./deployment-capture-readback.mjs')")<release.indexOf("await import('./deployment-smoke.mjs')"));
   assert.ok(release.includes("if (target === 'staging')"));
 });
+
+test('read-only diagnosis preserves missing flags for all three sources without rebuilding or deploying',async()=>{
+  const {inspectCaptureSettings}=await import('../deployment-capture-readback.mjs');
+  const {readFileSync}=await import('node:fs');
+  const {fetcher,requests}=provider(row=>{if(row.observability)delete row.observability.issues;});
+  const rows=await inspectCaptureSettings({account,token:'synthetic-token',fetcher});
+  assert.equal(rows[0].sources.current_worker.issues,'missing');
+  assert.deepEqual(rows[0].sources.legacy_settings,{enabled:'missing',logs:'missing',invocation_logs:'missing',traces:'missing',issues:'missing'});
+  assert.ok(requests.every(v=>v.method==='GET'));
+  const workflow=readFileSync(new URL('../../.github/workflows/ci.yml',import.meta.url),'utf8');
+  const job=workflow.slice(workflow.indexOf('  capture_readback:'),workflow.indexOf('  production:'));
+  assert.ok(job.includes("inputs.delivery == 'capture-readback-only'"));
+  assert.ok(job.includes('node scripts/deployment-capture-diagnose.mjs'));
+  assert.ok(!job.includes('deploy:staging')&&!job.includes('npm ci')&&!job.includes('worker-build'));
+  assert.equal((workflow.match(/inputs.delivery != 'capture-readback-only'/g)||[]).length,3);
+});

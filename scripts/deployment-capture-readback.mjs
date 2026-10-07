@@ -54,3 +54,27 @@ export async function verifyCaptureSettings({account,token,fetcher=fetch}){
   }
   return results;
 }
+
+/** Project only explicit booleans; absent provider fields stay visibly missing, never inferred false. */
+function projectedFlags(value){
+  const flag=value=>{if(value==null)return 'missing';if(typeof value!=='boolean')throw new Error('Staging capture flag type unverified.');return value;};
+  return {enabled:flag(value?.enabled),logs:flag(value?.logs?.enabled),invocation_logs:flag(value?.logs?.invocation_logs),traces:flag(value?.traces?.enabled),issues:flag(value?.issues?.enabled)};
+}
+
+/** Pure read-only diagnosis of all three fixed provider views, without claiming capture-off acceptance. */
+export async function inspectCaptureSettings({account,token,fetcher=fetch}){
+  if(!/^[0-9a-f]{32}$/.test(account??'') || typeof token!=='string' || !token)throw new Error('Staging capture readback credentials unavailable.');
+  const result=[];
+  for(const service of ['billing','subscribe']){
+    const script=`moesegfault-${service}-staging`;
+    const before=serving(await read(account,token,`scripts/${script}/deployments?per_page=1&page=1`,fetcher));
+    const worker=await read(account,token,`workers/${script}`,fetcher);
+    if(worker.name!==script || typeof worker.id!=='string' || !worker.id)throw new Error('Staging capture resource identity unverified.');
+    const legacy=await read(account,token,`scripts/${script}/settings`,fetcher);
+    const scriptSettings=await read(account,token,`scripts/${script}/script-settings`,fetcher);
+    const after=serving(await read(account,token,`scripts/${script}/deployments?per_page=1&page=1`,fetcher));
+    if(JSON.stringify(before)!==JSON.stringify(after))throw new Error('Staging serving deployment changed during capture readback.');
+    result.push({service,version_id:before.version_id,sources:{current_worker:projectedFlags(worker.observability),legacy_settings:projectedFlags(legacy.observability),script_settings:projectedFlags(scriptSettings.observability)}});
+  }
+  return result;
+}

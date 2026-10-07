@@ -12,7 +12,7 @@ on:
         required: true
         type: choice
         default: verify-only
-        options: [verify-only, staging-only, production-only]
+        options: [verify-only, staging-only, production-only, capture-readback-only]
       artifact_run_id:
         description: Successful staging run whose verified artifact is promoted without rebuilding
         required: false
@@ -33,7 +33,7 @@ env:
 jobs:
   rust:
     name: Rust tests and WASM build
-    if: github.event_name != 'workflow_dispatch' || inputs.delivery != 'production-only'
+    if: github.event_name != 'workflow_dispatch' || (inputs.delivery != 'production-only' && inputs.delivery != 'capture-readback-only')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -72,7 +72,7 @@ jobs:
 
   frontend:
     name: Frontend and deployment contracts
-    if: github.event_name != 'workflow_dispatch' || inputs.delivery != 'production-only'
+    if: github.event_name != 'workflow_dispatch' || (inputs.delivery != 'production-only' && inputs.delivery != 'capture-readback-only')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -99,7 +99,7 @@ jobs:
 
   package:
     name: Immutable staging package
-    if: github.event_name != 'workflow_dispatch' || inputs.delivery != 'production-only'
+    if: github.event_name != 'workflow_dispatch' || (inputs.delivery != 'production-only' && inputs.delivery != 'capture-readback-only')
     needs: [rust, frontend]
     runs-on: ubuntu-24.04
     timeout-minutes: 8
@@ -158,6 +158,22 @@ jobs:
           node scripts/deployment-amail-secret.mjs
           npm run deploy:staging
 
+  capture_readback:
+    name: Read-only staging capture diagnosis
+    if: github.event_name == 'workflow_dispatch' && inputs.delivery == 'capture-readback-only'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    environment: cloudflare-staging
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: {node-version: '${{ env.NODE_VERSION }}', package-manager-cache: false}
+      - name: Read fixed provider capture metadata only
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/deployment-capture-diagnose.mjs
   production:
     name: Explicit production promotion
     if: github.event_name == 'workflow_dispatch' && inputs.delivery == 'production-only' && github.ref == 'refs/heads/main'
