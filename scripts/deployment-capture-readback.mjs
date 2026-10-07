@@ -40,11 +40,12 @@ function noncontradictory(value){
 }
 
 /** Verify both fixed staging workers and return only sanitized flags plus immutable version IDs. */
-export async function verifyCaptureSettings({account,token,fetcher=fetch}){
+export async function verifyCaptureSettings({account,token,fetcher=fetch,target='staging'}){
   if(!/^[0-9a-f]{32}$/.test(account??'') || typeof token!=='string' || !token)throw new Error('Staging capture readback credentials unavailable.');
+  if(!['staging','production'].includes(target))throw new Error('Capture realm unverified.');
   const results=[];
   for(const service of ['billing','subscribe']){
-    const script=`moesegfault-${service}-staging`;
+    const script=`moesegfault-${service}${target==='staging'?'-staging':''}`;
     const before=serving(await read(account,token,`scripts/${script}/deployments?per_page=1&page=1`,fetcher));
     const worker=await read(account,token,`workers/${script}`,fetcher);
     if(worker.name!==script || typeof worker.id!=='string' || !worker.id || worker.logpush!==false || !Array.isArray(worker.tail_consumers) || worker.tail_consumers.length || worker.streaming_tail_consumers?.length)throw new Error('Staging current Worker capture resource unverified.');

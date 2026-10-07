@@ -205,6 +205,13 @@ jobs:
           path: .temp/release
           run-id: ${{ inputs.artifact_run_id }}
           github-token: ${{ github.token }}
+      - name: Provision independent production amail service capability
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          AMAIL_SERVICE_KEY: ${{ secrets.AMAIL_SERVICE_KEY }}
+          PRODUCTION_DEPLOY_CONFIRM: production-only
+        run: node scripts/deployment-amail-secret.mjs production
       - name: Promote the same immutable artifact into isolated production resources
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

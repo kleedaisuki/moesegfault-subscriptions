@@ -6,18 +6,51 @@
   "workers_dev": false,
   "preview_urls": false,
   "minify": true,
-  "routes": [{ "pattern": "billing.moesegfault.dev", "custom_domain": true }],
+  "routes": [
+    {
+      "pattern": "billing.moesegfault.dev",
+      "custom_domain": true
+    }
+  ],
   "vars": {
     "ENVIRONMENT": "production",
     "IDENTITY_ISSUER": "https://identity.moesegfault.dev",
     "BILLING_AUDIENCES": "[\"subscribe\"]",
-    "PLAN_REGISTRY_JSON": "[{\"id\":\"platform-monthly\",\"product_id\":\"moesegfault-platform\",\"name\":{\"zh-CN\":\"平台月度订阅\",\"en\":\"Platform monthly\",\"ja\":\"プラットフォーム月額\"},\"description\":{\"zh-CN\":\"使用激活码开启 30 天平台订阅。\",\"en\":\"Activate 30 days of platform access with a code.\",\"ja\":\"コードで 30 日間のプラットフォーム利用を有効にします。\"},\"duration_days\":30,\"active\":true,\"entitlements\":[\"platform.access\"]}]",
-    "EMAIL_FROM_ADDRESS": "subscribe@moesegfault.dev"
+    "PLAN_REGISTRY_JSON": "[{\"id\":\"platform-monthly\",\"product_id\":\"moesegfault-platform\",\"name\":{\"zh-CN\":\"平台月度订阅\",\"en\":\"Platform monthly\",\"ja\":\"プラットフォーム月額\"},\"description\":{\"zh-CN\":\"使用激活码开启 30 天平台订阅。\",\"en\":\"Activate 30 days of platform access with a code.\",\"ja\":\"コードで 30 日間のプラットフォーム利用を有効にします。\"},\"duration_days\":30,\"active\":true,\"entitlements\":[\"platform.access\"]},{\"id\":\"amail-free\",\"product_id\":\"amail\",\"name\":{\"en\":\"amail Free\",\"ja\":\"amail Free\",\"zh-CN\":\"amail Free\"},\"description\":{\"en\":\"Community plan USD $0/month. Overage: $0.001/recipient, $0.15/GB-month, $0.50/address-month. Inbound and semantic search unmetered; authorized usage pending settlement.\",\"ja\":\"コミュニティ USD $0/月。超過: $0.001/受信者、$0.15/GB月、$0.50/アドレス月。受信・意味検索は無料。承認済み利用は未決済。\",\"zh-CN\":\"社区价 $0 USD/月。超额发信 $0.001/收件人、存储 $0.15/GB·月、地址 $0.50/个·月。收信与语义搜索不计费；授权用量待结算。\"},\"duration_days\":30,\"active\":true,\"entitlements\":[\"amail.plan.free\",\"amail.outbound.monthly.100\",\"amail.storage.bytes.200000000\",\"amail.addresses.1\"]},{\"id\":\"amail-lite\",\"product_id\":\"amail\",\"name\":{\"en\":\"amail Lite\",\"ja\":\"amail Lite\",\"zh-CN\":\"amail Lite\"},\"description\":{\"en\":\"Community plan USD $1.50/month. Overage: $0.001/recipient, $0.15/GB-month, $0.50/address-month. Inbound and semantic search unmetered; authorized usage pending settlement.\",\"ja\":\"コミュニティ USD $1.50/月。超過: $0.001/受信者、$0.15/GB月、$0.50/アドレス月。受信・意味検索は無料。承認済み利用は未決済。\",\"zh-CN\":\"社区价 $1.50 USD/月。超额发信 $0.001/收件人、存储 $0.15/GB·月、地址 $0.50/个·月。收信与语义搜索不计费；授权用量待结算。\"},\"duration_days\":30,\"active\":true,\"entitlements\":[\"amail.plan.lite\",\"amail.outbound.monthly.1000\",\"amail.storage.bytes.2000000000\",\"amail.addresses.3\"]},{\"id\":\"amail-plus\",\"product_id\":\"amail\",\"name\":{\"en\":\"amail Plus\",\"ja\":\"amail Plus\",\"zh-CN\":\"amail Plus\"},\"description\":{\"en\":\"Community plan USD $4.50/month. Overage: $0.001/recipient, $0.15/GB-month, $0.50/address-month. Inbound and semantic search unmetered; authorized usage pending settlement.\",\"ja\":\"コミュニティ USD $4.50/月。超過: $0.001/受信者、$0.15/GB月、$0.50/アドレス月。受信・意味検索は無料。承認済み利用は未決済。\",\"zh-CN\":\"社区价 $4.50 USD/月。超额发信 $0.001/收件人、存储 $0.15/GB·月、地址 $0.50/个·月。收信与语义搜索不计费；授权用量待结算。\"},\"duration_days\":30,\"active\":true,\"entitlements\":[\"amail.plan.plus\",\"amail.outbound.monthly.5000\",\"amail.storage.bytes.10000000000\",\"amail.addresses.5\"]}]",
+    "EMAIL_FROM_ADDRESS": "subscribe@moesegfault.dev",
+    "SUBSCRIBE_ORIGIN": "https://subscribe.moesegfault.dev",
+    "AMAIL_RETURN_URL_ALLOWLIST": "[\"https://amail.moesegfault.dev/billing/return\"]"
   },
-  "d1_databases": [{
-    "binding": "BILLING_DB", "database_name": "moesegfault-billing-production",
-    "database_id": "b639187a-5a0c-4af9-b1d0-b6bf863075fa", "migrations_dir": "migrations/billing"
-  }],
-  "send_email": [{ "name": "EMAIL", "allowed_sender_addresses": ["subscribe@moesegfault.dev"] }],
-  "observability": { "enabled": true, "redact_query_string": true, "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false } }
+  "d1_databases": [
+    {
+      "binding": "BILLING_DB",
+      "database_name": "moesegfault-billing-production",
+      "database_id": "b639187a-5a0c-4af9-b1d0-b6bf863075fa",
+      "migrations_dir": "migrations/billing"
+    }
+  ],
+  "send_email": [
+    {
+      "name": "EMAIL",
+      "allowed_sender_addresses": [
+        "subscribe@moesegfault.dev"
+      ]
+    }
+  ],
+  "observability": {
+    "enabled": false,
+    "redact_query_string": true,
+    "logs": {
+      "enabled": false,
+      "head_sampling_rate": 1,
+      "invocation_logs": false
+    },
+    "traces": {
+      "enabled": false
+    },
+    "issues": {
+      "enabled": false
+    }
+  },
+  "logpush": false
 }

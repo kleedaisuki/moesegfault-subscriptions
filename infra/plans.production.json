@@ -17,5 +17,71 @@
     "entitlements": [
       "platform.access"
     ]
+  },
+  {
+    "id": "amail-free",
+    "product_id": "amail",
+    "name": {
+      "en": "amail Free",
+      "ja": "amail Free",
+      "zh-CN": "amail Free"
+    },
+    "description": {
+      "en": "Community plan USD $0/month. Overage: $0.001/recipient, $0.15/GB-month, $0.50/address-month. Inbound and semantic search unmetered; authorized usage pending settlement.",
+      "ja": "コミュニティ USD $0/月。超過: $0.001/受信者、$0.15/GB月、$0.50/アドレス月。受信・意味検索は無料。承認済み利用は未決済。",
+      "zh-CN": "社区价 $0 USD/月。超额发信 $0.001/收件人、存储 $0.15/GB·月、地址 $0.50/个·月。收信与语义搜索不计费；授权用量待结算。"
+    },
+    "duration_days": 30,
+    "active": true,
+    "entitlements": [
+      "amail.plan.free",
+      "amail.outbound.monthly.100",
+      "amail.storage.bytes.200000000",
+      "amail.addresses.1"
+    ]
+  },
+  {
+    "id": "amail-lite",
+    "product_id": "amail",
+    "name": {
+      "en": "amail Lite",
+      "ja": "amail Lite",
+      "zh-CN": "amail Lite"
+    },
+    "description": {
+      "en": "Community plan USD $1.50/month. Overage: $0.001/recipient, $0.15/GB-month, $0.50/address-month. Inbound and semantic search unmetered; authorized usage pending settlement.",
+      "ja": "コミュニティ USD $1.50/月。超過: $0.001/受信者、$0.15/GB月、$0.50/アドレス月。受信・意味検索は無料。承認済み利用は未決済。",
+      "zh-CN": "社区价 $1.50 USD/月。超额发信 $0.001/收件人、存储 $0.15/GB·月、地址 $0.50/个·月。收信与语义搜索不计费；授权用量待结算。"
+    },
+    "duration_days": 30,
+    "active": true,
+    "entitlements": [
+      "amail.plan.lite",
+      "amail.outbound.monthly.1000",
+      "amail.storage.bytes.2000000000",
+      "amail.addresses.3"
+    ]
+  },
+  {
+    "id": "amail-plus",
+    "product_id": "amail",
+    "name": {
+      "en": "amail Plus",
+      "ja": "amail Plus",
+      "zh-CN": "amail Plus"
+    },
+    "description": {
+      "en": "Community plan USD $4.50/month. Overage: $0.001/recipient, $0.15/GB-month, $0.50/address-month. Inbound and semantic search unmetered; authorized usage pending settlement.",
+      "ja": "コミュニティ USD $4.50/月。超過: $0.001/受信者、$0.15/GB月、$0.50/アドレス月。受信・意味検索は無料。承認済み利用は未決済。",
+      "zh-CN": "社区价 $4.50 USD/月。超额发信 $0.001/收件人、存储 $0.15/GB·月、地址 $0.50/个·月。收信与语义搜索不计费；授权用量待结算。"
+    },
+    "duration_days": 30,
+    "active": true,
+    "entitlements": [
+      "amail.plan.plus",
+      "amail.outbound.monthly.5000",
+      "amail.storage.bytes.10000000000",
+      "amail.addresses.5"
+    ]
   }
 ]

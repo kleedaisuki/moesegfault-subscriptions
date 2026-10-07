@@ -7,11 +7,11 @@ const require=createRequire(import.meta.url);
 const account='1'.repeat(32);const id='11111111-1111-4111-8111-111111111111';
 
 /** Fixed fixture records only safe request semantics and returns realistic metadata shapes. */
-function provider(change=()=>{}){
+function provider(change=()=>{},target='staging'){
   const requests=[];
   const fetcher=async(url,options)=>{
     requests.push({url,method:options.method,redirect:options.redirect});
-    const script=/moesegfault-(billing|subscribe)-staging/.exec(url)?.[0];assert.ok(script);
+    const script=/moesegfault-(billing|subscribe)(?:-staging)?/.exec(url)?.[0];assert.ok(script);
     let result;
     if(url.includes('/deployments?'))result={deployments:[{id,strategy:'percentage',versions:[{version_id:id,percentage:100}]}]};
     else if(url.includes('/workers/workers/'))result={id,name:script,logpush:false,tail_consumers:[],observability:{enabled:false,logs:{enabled:false,invocation_logs:false},traces:{enabled:false},issues:{enabled:false}}};
@@ -58,7 +58,7 @@ test('staging pipeline verifies independent capture settings after deploy and be
   const release=readFileSync(new URL('../deployment-release.mjs',import.meta.url),'utf8');
   assert.ok(release.indexOf("await import('./deployment-capture-readback.mjs')")>release.indexOf("wrangler('deploy'"));
   assert.ok(release.indexOf("await import('./deployment-capture-readback.mjs')")<release.indexOf("await import('./deployment-smoke.mjs')"));
-  assert.ok(release.includes("if (target === 'staging')"));
+  assert.ok(release.includes('token: process.env.CLOUDFLARE_API_TOKEN, target}'));
 });
 
 test('read-only diagnosis preserves missing flags for all three sources without rebuilding or deploying',async()=>{
@@ -89,4 +89,13 @@ test('documented Issues section absence is off only with explicit root Logs and 
   }
   const logsOn=provider(row=>{if(row.observability){row.observability.logs.enabled=true;delete row.observability.issues;}});
   await assert.rejects(()=>verifyCaptureSettings({account,token:'synthetic-token',fetcher:logsOn.fetcher}),/policy unverified/);
+});
+
+
+test('production capture readback selects only production names and rejects unknown realms',async()=>{
+  const {fetcher,requests}=provider(()=>{},'production');
+  const rows=await verifyCaptureSettings({account,token:'synthetic-token',fetcher,target:'production'});
+  assert.equal(rows.length,2);
+  assert.ok(requests.every(row=>!row.url.includes('-staging')));
+  await assert.rejects(()=>verifyCaptureSettings({account,token:'synthetic-token',fetcher,target:'unknown'}),/realm unverified/);
 });

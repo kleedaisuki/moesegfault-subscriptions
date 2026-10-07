@@ -1,5 +1,26 @@
 # Production promotion
 
+## Current amail USD promotion authority — 2026-10-08 Asia/Singapore
+
+The owner now explicitly authorizes the accepted amail v0.2.0 USD bridge in
+production. Promote immutable runtime86bb06e from successful staging37641220454;
+production configuration/tooling is separate from that artifact's runtime source.
+Keep existing production platform plans, Identity client/sector, D1s, session
+keys and formal administrator recipient. Add Free/Lite/Plus at fixed USD0/1.50/4.50,
+and overage0.001/recipient,0.15/GB-month,0.50/address-month. Billing still uses
+activation grants and pending-settlement liability, not automatic payment.
+
+An independent create-only production AMAIL_SERVICE_KEY is provided through the
+protected cloudflare-production environment, matching Mail production's separate
+BILLING_SERVICE_KEY. Both service destinations are validated before the first
+secret update. Explicit production confirmation is required; staging remains the
+default. Both production services now disable automatic HTTP Logs/Traces/Issues
+and verify exact current-version capture settings before smoke. The amail return
+allowlist contains only https://amail.moesegfault.dev/billing/return. Source-owned
+Mail predecessor/rolling schema and ownership acceptance are in the Mail repository
+`docs/v0.2.0/production-delivery.md`. Actual promotion/readback will be recorded
+below once successful; the earlier production epoch remains historical evidence.
+
 ## Authority and accepted runtime
 
 On 2026-10-05 (Asia/Singapore), the user explicitly authorized production rollout
