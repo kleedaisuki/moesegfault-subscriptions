@@ -9,11 +9,17 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --maxWorkers=1"
   },
-  "dependencies": {"react": "19.2.8", "react-dom": "19.2.8"},
+  "dependencies": {
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
   "devDependencies": {
     "@types/node": "24.10.0",
-    "@types/react": "19.2.14", "@types/react-dom": "19.2.3",
-    "@vitejs/plugin-react": "6.0.0", "typescript": "6.0.3",
-    "vite": "8.2.2", "vitest": "4.1.11"
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.0",
+    "typescript": "6.0.3",
+    "vite": "8.3.5",
+    "vitest": "4.1.12"
   }
 }
