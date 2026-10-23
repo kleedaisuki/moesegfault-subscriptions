@@ -39,7 +39,7 @@ test('static assets never swallow BFF APIs or OAuth callbacks', async () => {
 test('billing accepts only registered staging audience and valid deployment-owned plan', async () => {
   const settings = await config('billing');
   assert.equal(settings.d1_databases[0].binding, 'BILLING_DB');
-  assert.deepEqual(JSON.parse(settings.vars.BILLING_AUDIENCES), ['subscribe-staging']);
+  assert.deepEqual(JSON.parse(settings.vars.BILLING_AUDIENCES), ['subscribe-staging', 'agents-dashboard-staging', 'magents-staging']);
   const plans = JSON.parse(settings.vars.PLAN_REGISTRY_JSON);
   const catalog = JSON.parse(await readFile(new URL('../../infra/plans.staging.json', import.meta.url), 'utf8'));
   validateCatalog(catalog);

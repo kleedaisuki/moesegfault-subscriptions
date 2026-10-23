@@ -17,7 +17,7 @@ test('amail bridge catalog and callback remain realm-isolated without sector mut
   assert.deepEqual(JSON.parse(production.vars.PLAN_REGISTRY_JSON).filter(p => p.product_id === 'amail').map(p=>p.id), ['amail-free','amail-lite','amail-plus']);
   assert.equal(production.vars.SUBSCRIBE_ORIGIN,'https://subscribe.moesegfault.dev');
   assert.deepEqual(JSON.parse(production.vars.AMAIL_RETURN_URL_ALLOWLIST),['https://amail.moesegfault.dev/billing/return']);
-  assert.deepEqual(JSON.parse(staging.vars.BILLING_AUDIENCES), ['subscribe-staging']);
+  assert.deepEqual(JSON.parse(staging.vars.BILLING_AUDIENCES), ['subscribe-staging', 'agents-dashboard-staging', 'magents-staging']);
 });
 
 test('dedicated service credential provisioning suppresses diagnostics and never selects production', () => {
