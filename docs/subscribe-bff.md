@@ -93,3 +93,66 @@ Identity's approved registration flow can legitimately consume an initial five-m
 The BFF now uses the single `PREAUTH_TTL_SECONDS = 30 * 60` constant for both its server-side login transaction deadline and browser-bound login cookie. The extra five minutes provides bounded navigation/processing margin. Transactions remain single-use, browser-bound and cleaned up after expiry; successful and failed callbacks clear their cookie. This extends only unauthenticated registration opportunity, not authenticated privilege. The actual provider access-token lifetime (300 seconds), local session cap, nonce/issuer/audience checks and no-refresh/no-`offline_access` policy are unchanged.
 
 Focused validation passed nine Rust tests (including registration budget/cookie equality and the unchanged token-limited session expiry) in 1.24 seconds incremental compilation, plus WASM checking in 0.47 seconds. No unrelated frontend suite or release build was run for this constant-only behavioral change.
+
+
+## SSO entry and response-path costs (2026-10-24)
+
+A valid Identity browser session and a valid Subscribe session are different
+boundaries. Identity's authorization handler reuses its own session unless the
+request explicitly selects another account. Subscribe must initiate the ordinary
+top-level OIDC flow on an integration handoff; displaying a second sign-in gate
+before that flow adds user work without adding authentication assurance. No shared
+parent-domain cookie, email join, or cross-origin token bridge is needed.
+
+The normal `/auth/login` entry validates all context and, when its own session is
+still valid, returns directly to the same allowlisted portal destination. Explicit
+`prompt=select_account` bypasses that shortcut and is forwarded to Identity;
+other prompt values and duplicates are rejected. This is the intentional account
+switch surface, not a default forced-login flag. Guest and expired sessions use
+fresh browser-bound state/nonce/PKCE exactly as before. Failed authentication must
+not restart automatic SSO; embedded Account views must use top-level navigation.
+
+The local session still cannot outlive either verified token. Live staging
+Discovery advertises refresh tokens and offline_access, but Subscribe's reviewed
+client registration grants only openid/profile. A durable refresh session would
+also require cross-isolate atomic refresh ownership, token-set replacement,
+unknown-outcome handling, and logout revocation. Extending the cookie beyond an
+access token without that machinery would only hide expiry until Billing rejects
+it. This iteration therefore preserves the token boundary and relies on bounded
+SSO re-entry rather than silently requesting a new permission.
+
+OIDC discovery now caches a single validated, exact-issuer entry per isolate for
+300 seconds. Cold reads stream at most 64 KiB; non-200 responses, redirects, issuer
+mismatches and foreign/credential-bearing/fragment-bearing endpoints remain
+rejected. Cache expiry is strict, issuer changes miss the cache, and fetch failures
+never extend old metadata. Login followed by callback within the warm window
+avoids the callback's previously redundant discovery network round trip.
+
+Subscribe's request and Billing-dependency telemetry writes now use the platform
+Context.wait_until lifetime rather than awaiting D1 writes on the browser response
+path. Span timestamps are captured before scheduling, preserving actual request
+and dependency duration. Server-owned authorization trace ancestry remains a
+synchronous business dependency so a following approval can recover its parent.
+Telemetry remains bounded, private and best-effort; immediate trace retrieval may
+race the background write and must tolerate eventual visibility.
+
+Rationale: [OpenID Connect Core authentication request](https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest)
+distinguishes normal SSO from explicit account selection. The production mechanism
+for detached response-independent work is
+[Cloudflare Context.wait_until](https://developers.cloudflare.com/workers/runtime-apis/context/#waituntil).
+For the research perspective, the formal OAuth analysis linked above distinguishes
+session integrity from authentication: eliminating a second UI gate must retain
+browser transaction binding and explicit account ownership, not merge principals.
+
+Focused verification: 18 Subscribe native tests passed, including strict metadata
+cache expiry/issuer isolation, endpoint validation, allowed prompt selection,
+CSRF, callback ambiguity, safe continuations and the unchanged token expiry.
+The WASM target check passed. The repository's real-workerd metadata regression
+and actual SQLite session/single-use transaction checks passed 4/4. These checks
+establish local invariants; hosted browser SSO and measured latency acceptance
+belong to the integrated staging run, not to this module-only result.
+
+The established Account integration entry `/account?reconnect=1` remains an
+explicit account switch: it redirects to `/auth/login?path=/account&prompt=select_account`,
+not the normal reusable-session login. This preserves older embedded clients'
+reconnect behavior even while their current Subscribe cookie is still valid.
