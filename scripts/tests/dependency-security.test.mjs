@@ -19,3 +19,11 @@ test('patched sharp loads its native binary and rasterizes a bounded trusted SVG
   const {info}=await sharp(input).png().toBuffer({resolveWithObject:true});
   assert.equal(info.width,2); assert.equal(info.height,2); assert.equal(info.format,'png');
 });
+
+test('Miniflare uses patched Undici without downgrading Wrangler',()=>{
+  const manifest=JSON.parse(readFileSync(new URL('../../package.json',import.meta.url),'utf8'));
+  const lock=JSON.parse(readFileSync(new URL('../../package-lock.json',import.meta.url),'utf8'));
+  assert.equal(manifest.overrides.miniflare.undici,'7.30.1');
+  assert.equal(lock.packages['node_modules/undici'].version,'7.30.1');
+  assert.equal(lock.packages['node_modules/wrangler'].version,'4.147.0');
+});

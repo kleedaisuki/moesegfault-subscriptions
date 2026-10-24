@@ -83,5 +83,65 @@
       "amail.storage.bytes.10000000000",
       "amail.addresses.5"
     ]
+  },
+  {
+    "id": "agents-go",
+    "product_id": "agents",
+    "name": {
+      "en": "Agents Go",
+      "zh-CN": "Agents Go",
+      "ja": "Agents Go"
+    },
+    "description": {
+      "en": "Staging synthetic plan only; no real charges. Proposed USD $10 per 30 days, including $8 API-equivalent usage credit. Resource usage is separately metered.",
+      "zh-CN": "仅预发布模拟套餐，不产生真实扣款。拟定每 30 天 $10 USD，含 $8 API 等值用量额度；资源使用另行计量。",
+      "ja": "ステージング専用の模擬プラン。実際の請求なし。30 日 USD $10、API 相当クレジット $8 込み。リソース利用は別途計量。"
+    },
+    "duration_days": 30,
+    "active": true,
+    "entitlements": [
+      "agents.access",
+      "agents.tier.go"
+    ]
+  },
+  {
+    "id": "agents-plus",
+    "product_id": "agents",
+    "name": {
+      "en": "Agents Plus",
+      "zh-CN": "Agents Plus",
+      "ja": "Agents Plus"
+    },
+    "description": {
+      "en": "Staging synthetic plan only; no real charges. Proposed USD $20 per 30 days, including $18 API-equivalent usage credit. Resource usage is separately metered.",
+      "zh-CN": "仅预发布模拟套餐，不产生真实扣款。拟定每 30 天 $20 USD，含 $18 API 等值用量额度；资源使用另行计量。",
+      "ja": "ステージング専用の模擬プラン。実際の請求なし。30 日 USD $20、API 相当クレジット $18 込み。リソース利用は別途計量。"
+    },
+    "duration_days": 30,
+    "active": true,
+    "entitlements": [
+      "agents.access",
+      "agents.tier.plus"
+    ]
+  },
+  {
+    "id": "agents-pro",
+    "product_id": "agents",
+    "name": {
+      "en": "Agents Pro",
+      "zh-CN": "Agents Pro",
+      "ja": "Agents Pro"
+    },
+    "description": {
+      "en": "Staging synthetic plan only; no real charges. Proposed USD $200 per 30 days, including $180 API-equivalent usage credit. Resource usage is separately metered.",
+      "zh-CN": "仅预发布模拟套餐，不产生真实扣款。拟定每 30 天 $200 USD，含 $180 API 等值用量额度；资源使用另行计量。",
+      "ja": "ステージング専用の模擬プラン。実際の請求なし。30 日 USD $200、API 相当クレジット $180 込み。リソース利用は別途計量。"
+    },
+    "duration_days": 30,
+    "active": true,
+    "entitlements": [
+      "agents.access",
+      "agents.tier.pro"
+    ]
   }
 ]

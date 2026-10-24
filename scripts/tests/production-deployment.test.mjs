@@ -19,7 +19,7 @@ test('production bindings cannot point at staging data, issuer, audience, servic
     for (const secret of ['BILLING_ADMIN_KEY', 'ADMIN_EMAIL', 'CLIENT_PRIVATE_KEY_JWK']) assert.equal(production.vars[secret], undefined);
     if (service === 'billing') {
       assert.equal(production.vars.IDENTITY_ISSUER, 'https://identity.moesegfault.dev');
-      assert.deepEqual(JSON.parse(production.vars.BILLING_AUDIENCES), ['subscribe']);
+      assert.deepEqual(JSON.parse(production.vars.BILLING_AUDIENCES), ['subscribe', 'agents-dashboard', 'magents']);
       const catalog = JSON.parse(await readFile(new URL('../../infra/plans.production.json', import.meta.url), 'utf8'));
       assert.deepEqual(validateCatalog(catalog), JSON.parse(production.vars.PLAN_REGISTRY_JSON));
     } else {
@@ -52,4 +52,19 @@ test('promotion rejects unrelated, failed, expired, and never-deployed staging a
   assert.throws(() => acceptedArtifact(run, [], artifacts, repository));
   assert.throws(() => acceptedArtifact(run, jobs, [{ ...artifacts[0], expired: true }], repository));
   assert.throws(() => acceptedArtifact(run, jobs, artifacts, 'unrelated/repository'));
+});
+
+test('Agents production catalog is activation-only with exact grant entitlements', async () => {
+  const production = JSON.parse(await readFile(new URL('../../wrangler.billing.production.jsonc', import.meta.url), 'utf8'));
+  const plans = JSON.parse(production.vars.PLAN_REGISTRY_JSON).filter(plan => plan.product_id === 'agents');
+  assert.deepEqual(plans.map(plan => plan.id), ['agents-go', 'agents-plus', 'agents-pro']);
+  for (const [index, tier] of ['go', 'plus', 'pro'].entries()) {
+    const plan = plans[index];
+    assert.equal(plan.active, true);
+    assert.equal(plan.duration_days, 30);
+    assert.deepEqual(plan.entitlements, ['agents.access', `agents.tier.${tier}`]);
+    assert.match(plan.description.en, /No automatic charge or renewal/);
+    assert.match(plan.description.en, /not a payment receipt/);
+    assert.doesNotMatch(plan.description.en, /synthetic|staging/);
+  }
 });
