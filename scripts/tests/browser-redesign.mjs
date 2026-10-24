@@ -1,6 +1,6 @@
 /** Reproducible browser journey against the built UI and an isolated synthetic BFF. */
 import assert from 'node:assert/strict';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile, rm } from 'node:fs/promises';
 import { resolve, isAbsolute } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { startFixture } from './browser-simulation-server.mjs';
@@ -9,6 +9,9 @@ const module = process.env.PLAYWRIGHT_MODULE ?? 'playwright';
 const { chromium } = await import(isAbsolute(module) ? pathToFileURL(module).href : module);
 const artifacts = resolve('.temp/ui-redesign');
 await mkdir(artifacts, { recursive: true });
+await writeFile(resolve(artifacts, 'requests.jsonl'), '');
+await Promise.all(['results.json', 'failure.png', 'failure-dom.txt'].map(name => rm(resolve(artifacts, name), { force: true })));
+const startedAt = new Date().toISOString();
 const runtime = resolve(artifacts, 'runtime');
 await mkdir(runtime, { recursive: true });
 const previousTemp = Object.fromEntries(['TMP', 'TEMP', 'TMPDIR'].map(key => [key, process.env[key]]));
@@ -35,17 +38,47 @@ try {
   await page.locator('.subscription-row').first().waitFor();
 
   assert.equal(await page.locator('.subscription-row').count(), 2);
-  assert.equal(await page.locator('.product-card').count(), 3);
-  assert.equal(await page.locator('.plan-option').count(), 7);
-  assert.deepEqual(await page.locator('.product-card').evaluateAll(cards => cards.map(card => card.querySelectorAll('.plan-option').length)), [1, 3, 3]);
-  results.push('Two user subscriptions, three product groups, seven real catalog plans');
+  assert.equal(await page.locator('.product-card,.plan-option').count(), 0);
   assert.equal(await page.locator('#profile').count(), 1);
   assert.equal(await page.locator('#profile input').count(), 0);
   assert.equal(await page.locator('.hero, .steps, .section-number').count(), 0);
+  results.push('Account root shows only two real subscriptions and one billing address, never seven catalog offerings');
+
+  const billingBeforeCatalog = fixture.events.filter(event => event.path === '/api/billing').length;
+  await page.getByRole('link', { name: 'Browse products', exact: false }).click();
+  await page.locator('.product-card').first().waitFor();
+  assert.equal(new URL(page.url()).pathname, '/products');
+  assert.equal(await page.locator('.product-card').count(), 3);
+  assert.equal(await page.locator('.plan-option').count(), 7);
+  assert.deepEqual(await page.locator('.product-card').evaluateAll(cards => cards.map(card => card.querySelectorAll('.plan-option').length)), [1, 3, 3]);
+  assert.equal(await page.locator('.subscription-row,#profile,#activate,input,form').count(), 0);
+  assert.equal(fixture.events.filter(event => event.path === '/api/billing').length, billingBeforeCatalog);
+  results.push('Explicit products navigation shows three groups/seven plans without fetching or rendering private billing data');
+  await page.goto(fixture.origin + '/products?locale=en&theme=light&plan=amail-plus');
+  await page.locator('.plan-requested').waitFor();
   assert.equal(await page.locator('.plan-requested').getAttribute('open'), '');
   assert.match(await page.locator('.plan-requested').innerText(), /authorized usage pending settlement/);
-  results.push('One collapsed account-wide billing address; requested plan terms remain accessible');
-
+  assert.equal(await page.locator('.plan-requested a').getAttribute('href'), '/#activate');
+  const disclosure = page.locator('.plan-option').first().locator('summary');
+  await disclosure.focus();
+  await page.keyboard.press('Enter');
+  assert.equal(await disclosure.evaluate(summary => summary.parentElement.open), true);
+  await page.screenshot({ path: resolve(artifacts, 'products-en-light-desktop.png'), fullPage: true });
+  for (const locale of ['zh-CN', 'ja', 'en']) {
+    await page.locator('#language').selectOption(locale);
+    await page.locator('#theme').selectOption('dark');
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true, `${locale} products mobile overflow`);
+    await page.screenshot({ path: resolve(artifacts, `products-${locale}-dark-mobile.png`), fullPage: true });
+  }
+  results.push('Separate catalog preserves requested-plan terms, activation navigation, keyboard disclosures and three-language mobile layout');
+  await page.locator('.browse-link').click();
+  await page.locator('.subscription-row').first().waitFor();
+  assert.equal(new URL(page.url()).pathname, '/');
+  assert.equal(await page.locator('.product-card,.plan-option').count(), 0);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.locator('#theme').selectOption('light');
+  results.push('Catalog return navigation restores subscription-only account view');
   await page.locator('#profile button').click();
   await page.locator('#profile-display_name').fill('Synthetic UI Customer');
   await page.locator('#profile-email').fill('fixture@example.invalid');
@@ -120,11 +153,7 @@ try {
   await page.locator('#profile button').click();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true, '320px edit form overflow');
   await page.locator('#profile').getByRole('button', { name: 'Cancel', exact: true }).click();
-  const disclosure = page.locator('.plan-option').first().locator('summary');
-  await disclosure.focus();
-  await page.keyboard.press('Enter');
-  assert.equal(await disclosure.evaluate(summary => summary.parentElement.open), true);
-  results.push('320–1440px layouts and narrow edit form fit; keyboard opens native plan disclosure');
+  results.push('320–1440px account layouts and narrow edit form fit without overflow');
   await page.setViewportSize({ width: 390, height: 844 });
 
   await page.goto(fixture.origin + '/account?embedded=1&locale=ja&theme=dark');
@@ -199,8 +228,27 @@ try {
   await page.locator('#profile address strong').waitFor();
   assert.match(await page.locator('#profile address').innerText(), /Expiry draft customer/);
   results.push('Billing-save 401 restores same-subject draft after reauthentication; successful save clears draft');
+  await context.request.post(fixture.origin + '/__fixture/reset', { data: { seeded: false } });
+  await page.goto(fixture.origin + '/?locale=en');
+  await page.locator('#profile').waitFor();
+  assert.equal(await page.locator('.subscription-row,.product-card,.plan-option').count(), 0);
+  assert.equal(await page.locator('#subscriptions .empty-state').count(), 1);
+  assert.equal(await page.locator('#profile').count(), 1);
+  await page.screenshot({ path: resolve(artifacts, 'account-empty-en.png'), fullPage: true });
+  results.push('Empty real subscription list remains empty despite seven available catalog plans');
+  const billingBeforeGuestCatalog = fixture.events.filter(event => event.path === '/api/billing').length;
+  await page.evaluate(() => sessionStorage.removeItem('subscribe-sso-attempted'));
+  await page.goto(fixture.origin + '/products?locale=en&scenario=guest');
+  await page.locator('.product-card').first().waitFor();
+  assert.equal(new URL(page.url()).pathname, '/products');
+  assert.equal(await page.locator('.plan-option').count(), 7);
+  assert.equal(await page.locator('.subscription-row,#profile,#activate,input,form,.login-panel').count(), 0);
+  assert.equal(fixture.events.filter(event => event.path === '/api/billing').length, billingBeforeGuestCatalog);
+  assert.equal(fixture.events.filter(event => event.path === '/auth/login').length, 0);
+  assert.equal(await page.evaluate(() => sessionStorage.getItem('subscribe-sso-attempted')), null);
+  results.push('Guest public catalog performs no billing fetch and no automatic authentication redirect');
   assert.deepEqual(pageErrors, []);
-  await writeFile(resolve(artifacts, 'results.json'), JSON.stringify({ results, pageErrors, fixtureOnly: true }, null, 2));
+  await writeFile(resolve(artifacts, 'results.json'), JSON.stringify({ startedAt, completedAt: new Date().toISOString(), browser: browser.version(), results, pageErrors, fixtureOnly: true }, null, 2));
   console.log(`PASS: ${results.length} browser journey assertions; artifacts ${artifacts}`);
 } catch (error) {
   await page.screenshot({ path: resolve(artifacts, 'failure.png'), fullPage: true }).catch(() => {});

@@ -14,15 +14,14 @@ button, a, select, input, summary { -webkit-tap-highlight-color: transparent; }
 .brand-mark img { width: 29px; height: 29px; }
 .header-controls { display: flex; align-items: center; gap: 12px; }
 select { border: 1px solid var(--moe-border); border-radius: 8px; padding: 8px 10px; color: var(--moe-text); background: var(--moe-surface); font-size: 12px; min-height: 40px; }
-.page-heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 44px 0 28px; }
+.page-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px 24px; padding: 44px 0 28px; }
 h1 { font-size: clamp(28px, 3vw, 38px); line-height: 1.25; letter-spacing: -.035em; color: var(--moe-heading); font-weight: 650; margin-bottom: 0; }
+.page-heading > div { min-width: 0; }
 .account-name { color: var(--moe-text-soft); margin: 8px 0 0; font-size: 14px; overflow-wrap: anywhere; }
 .browse-link { text-decoration: none; font-size: 13px; white-space: nowrap; }
 .browse-link span { margin-left: 10px; }
-.dashboard { display: grid; grid-template-columns: minmax(0, 1fr) 340px; grid-template-areas: "subscriptions activation" "catalog billing"; gap: 26px 28px; align-items: start; }
-.guest-dashboard { grid-template-columns: 1fr; grid-template-areas: "subscriptions" "catalog"; }
+.dashboard { display: grid; grid-template-columns: minmax(0, 1fr) 340px; grid-template-areas: "subscriptions activation" "subscriptions billing"; gap: 26px 28px; align-items: start; }
 .subscriptions-panel, .login-panel { grid-area: subscriptions; }
-.catalog { grid-area: catalog; }
 .activation-panel { grid-area: activation; }
 .billing-panel { grid-area: billing; }
 .panel { background: var(--moe-surface); border: 1px solid var(--moe-border); border-radius: 16px; padding: 24px; }
@@ -106,10 +105,10 @@ button:disabled { cursor: wait; opacity: .6; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 .skip-link { position: absolute; top: -100px; left: 20px; padding: 12px; background: var(--moe-surface); z-index: 5; }
 .skip-link:focus { top: 10px; }
-@media (min-width: 1100px) { .guest-dashboard .product-grid { grid-template-columns: 1fr 1fr; align-items: start; } }
+@media (min-width: 1100px) { .product-grid { grid-template-columns: 1fr 1fr; align-items: start; } }
 @media (max-width: 950px) { .app-shell { padding: 0 24px; } .dashboard { grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; } .panel { padding: 20px; } .subscriptions-panel { padding: 4px 20px; } .subscription-row { flex-wrap: wrap; } .subscription-period { display: flex; width: 100%; align-items: center; justify-content: space-between; margin: 0; } .subscription-period p { margin: 0; } }
-@media (max-width: 700px) { .app-shell { padding: 0 18px; } .site-header { padding: 18px 0; flex-wrap: wrap; gap: 16px; } .header-controls { gap: 8px; margin-left: auto; } .brand { font-size: 14px; } select { max-width: 115px; padding: 7px; } .page-heading { padding: 30px 0 22px; } .dashboard, .guest-dashboard { display: flex; flex-direction: column; gap: 22px; } .dashboard > * { width: 100%; box-sizing: border-box; } .subscription-row { flex-wrap: nowrap; } .subscription-period { display: block; width: auto; margin-left: auto; } .subscription-period p { margin-top: 8px; } .product-heading { padding: 20px; } .product-plans { padding: 0 20px 6px; } }
-@media (max-width: 420px) { .header-controls { width: 100%; justify-content: space-between; } .subscription-row { flex-wrap: wrap; } .subscription-period { width: 100%; display: flex; justify-content: space-between; align-items: center; margin: 0; } .subscription-period p { margin: 0; } .page-heading { align-items: flex-start; } .browse-link { padding-top: 7px; } }
+@media (max-width: 700px) { .app-shell { padding: 0 18px; } .site-header { padding: 18px 0; flex-wrap: wrap; gap: 16px; } .header-controls { gap: 8px; margin-left: auto; } .brand { font-size: 14px; } select { max-width: 115px; padding: 7px; } .page-heading { padding: 30px 0 22px; } .dashboard { display: flex; flex-direction: column; gap: 22px; } .dashboard > * { width: 100%; box-sizing: border-box; } .subscription-row { flex-wrap: nowrap; } .subscription-period { display: block; width: auto; margin-left: auto; } .subscription-period p { margin-top: 8px; } .product-heading { padding: 20px; } .product-plans { padding: 0 20px 6px; } }
+@media (max-width: 420px) { .header-controls { width: 100%; justify-content: space-between; } .subscription-row { flex-wrap: wrap; } .subscription-period { width: 100%; display: flex; justify-content: space-between; align-items: center; margin: 0; } .subscription-period p { margin: 0; } .page-heading { align-items: flex-start; gap: 12px; } .browse-link { padding-top: 0; } }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { animation: none !important; transition: none !important; } }
 /* Hosted consent retains explicit tariff and consent controls. */
 .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .1em; color: var(--moe-text-soft); margin-bottom: 12px; overflow-wrap: anywhere; }

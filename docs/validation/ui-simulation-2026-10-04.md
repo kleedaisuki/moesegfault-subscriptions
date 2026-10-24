@@ -110,13 +110,16 @@ The runner owns an ephemeral loopback listener and an isolated browser context,
 then closes both. It never opens an existing browser profile, reads credentials,
 or contacts Identity/mail. `PLAYWRIGHT_MODULE` is a runtime path, not a new
 application dependency. Observed environment: Windows, Node 26.10.0, bundled
-Chromium 151.0.7922.34. The final execution passed 15 journey assertion groups
-with zero page errors, in approximately six seconds.
+Chromium 151.0.7922.34. The final execution passed 19 journey assertion groups
+with zero page errors, in approximately seven seconds.
 
 | Journey | Observed outcome |
 | --- | --- |
-| Product/account hierarchy | Three product cards contain 1/3/3 plans; two independent account subscriptions; exactly one initially collapsed billing address |
-| Important terms | Requested amail Plus disclosure opens and retains the complete real catalog overage/settlement terms |
+| Account/catalog separation | Default `/` shows only the two authoritative account subscriptions and one initially collapsed billing address, with zero catalog cards. Explicit Browse products navigation reaches `/products`, where three product cards contain 1/3/3 plans |
+| Empty account | An account with zero subscriptions still displays zero rows and zero product offerings even though the available catalog has seven plans |
+| Public product browsing | Authenticated and guest `/products` show no private subscription/address/activation forms and issue no `/api/billing` request; guest browsing does not start SSO |
+| Return navigation | Catalog navigation returns to subscription-only `/`; authenticated plan action targets `/#activate` |
+| Important terms | On `/products`, requested amail Plus disclosure opens and retains the complete real catalog overage/settlement terms |
 | Billing edit/save | Saved synthetic name, address and contact appear in one account summary; lowercase country becomes CN |
 | Cancel and native validation | Cancel discards unsaved edits; invalid email produces native typeMismatch and no additional profile PUT |
 | Activation uncertainty | Same-code 503 retry keeps its UUID; edited code gets a new UUID; invalid code remains editable; CSRF accompanies mutations |
@@ -135,13 +138,12 @@ intentional logout in the same tab. The logout suppression marker correctly
 prevented that. The fresh-entry scenario now explicitly clears only that
 synthetic tab marker, separately from the logout assertion. A keyboard harness
 locator initially selected the next closed details element after the first
-opened; it now tracks the stable first plan. Neither was a product failure.
+opened; it now tracks the stable first plan. Neither was a product failure. The later explicit-catalog navigation introduced a real 320px heading overflow: the longer Browse products link competed with the heading in a nonwrapping flex row. The width assertion detected it; production CSS was fixed to wrap the heading/navigation, and the unchanged 320px check then passed.
 
 Synthetic local evidence is under `.temp/ui-redesign/`: `results.json`,
 `requests.jsonl`, desktop and three-language mobile PNGs, and the Account embed
-PNG. Desktop, Chinese mobile and Japanese mobile screenshots were visually
-inspected: subscription status leads, activation is compact, product grouping is
-visible, and the single billing address is not duplicated per subscription.
+PNG. Desktop account, empty-account mobile and Japanese product-catalog mobile screenshots were visually
+inspected: subscription status leads, activation is compact, catalog browsing is a separate intent, and the single billing address is not duplicated per subscription.
 Failure screenshots/DOM dumps, if present, are diagnostic artifacts from earlier
 harness attempts and are not the basis of the final verdict.
 

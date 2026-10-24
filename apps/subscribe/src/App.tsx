@@ -115,17 +115,17 @@ export function SubscriptionList({ subscriptions, plans, locale, embedded = fals
   })}</div>;
 }
 
-export function ProductCatalog({ plans, locale, authenticated, requestedPlan }: { plans: Plan[]; locale: Locale; authenticated: boolean; requestedPlan?: string | null }) {
+export function ProductCatalog({ plans, locale, authenticated, requestedPlan, showHeading = true }: { plans: Plan[]; locale: Locale; authenticated: boolean; requestedPlan?: string | null; showHeading?: boolean }) {
   const t = messages[locale];
   const products = groupPlans(plans);
-  return <section className="catalog" id="products" aria-labelledby="catalog-title">
-    <div className="section-heading"><h2 id="catalog-title">{t.catalog}</h2></div>
+  return <section className="catalog" id="products" aria-labelledby={showHeading ? "catalog-title" : undefined} aria-label={showHeading ? undefined : t.catalog}>
+    {showHeading && <div className="section-heading"><h2 id="catalog-title">{t.catalog}</h2></div>}
     {!products.length && <p className="muted">{t.noPlans}</p>}
     <div className="product-grid">{products.map(product => <article className="product-card" key={product.id}>
       <div className="product-heading"><span className="product-icon" aria-hidden="true">{productName(product.id, locale).slice(0, 1)}</span><h3>{productName(product.id, locale)}</h3></div>
       <div className="product-plans">{product.plans.map(plan => <details key={plan.id} className={"plan-option " + (requestedPlan === plan.id ? 'plan-requested' : '')} open={requestedPlan === plan.id || undefined}>
         <summary><span className="plan-name">{plan.name[locale] || plan.name.en}{requestedPlan === plan.id && <span className="requested-dot" aria-label={t.selected} />}</span><span className="plan-duration">{plan.duration_days} {t.days}</span><span className="disclosure" aria-hidden="true">⌄</span></summary>
-        <div className="plan-details"><p className="muted">{plan.description[locale] || plan.description.en}</p><a href={authenticated ? '#activate' : loginPath(location.search)}>{t.useCode} <span aria-hidden="true">↗</span></a></div>
+        <div className="plan-details"><p className="muted">{plan.description[locale] || plan.description.en}</p><a href={authenticated ? '/#activate' : loginPath(location.search)}>{t.useCode} <span aria-hidden="true">↗</span></a></div>
       </details>)}</div>
     </article>)}</div>
   </section>;
@@ -212,9 +212,28 @@ export function ProfileForm({ initial, session, locale, onAuthenticationFailure 
   </section>;
 }
 
+function SubscriptionPanel({ billing, plans, locale, session, embedded = false, onRefresh }: { billing?: Billing; plans: Plan[]; locale: Locale; session: Session; embedded?: boolean; onRefresh: () => Promise<void> }) {
+  const t = messages[locale];
+  return <section className="panel subscriptions-panel" id="subscriptions" aria-labelledby="subscriptions-title">
+    <div className="section-heading"><h2 id="subscriptions-title" className={embedded ? '' : 'sr-only'}>{t.subscriptions}</h2><button className="text-button refresh-button" onClick={() => void onRefresh()}>{t.refresh}</button></div>
+    {embedded && <p className="viewer muted">{t.signedInAs}: <strong>{session?.user?.name || session?.user?.sub}</strong></p>}
+    {billing && <SubscriptionList subscriptions={billing.subscriptions} plans={plans} locale={locale} embedded={embedded} />}
+    {embedded && <div className="embed-actions"><a className="moe-button" href="/" target="_top">{t.manage} <span aria-hidden="true">↗</span></a><a href="/auth/login?path=%2Faccount&prompt=select_account" target="_top">{t.reconnect}</a></div>}
+  </section>;
+}
+
+export function AccountDashboard({ billing, plans, locale, session, onRefresh, onAuthenticationFailure }: { billing: Billing; plans: Plan[]; locale: Locale; session: Session; onRefresh: () => Promise<void>; onAuthenticationFailure: (error: unknown) => void }) {
+  return <div className="dashboard">
+    <SubscriptionPanel billing={billing} plans={plans} locale={locale} session={session} onRefresh={onRefresh} />
+    <ActivationForm session={session} locale={locale} onActivated={onRefresh} onAuthenticationFailure={onAuthenticationFailure} />
+    <ProfileForm key={billing.account.id} initial={billing.account.profile} session={session} locale={locale} onAuthenticationFailure={onAuthenticationFailure} />
+  </div>;
+}
+
 /** A same-origin BFF is the sole trust boundary for this browser application. */
 export default function App() {
   const query = new URLSearchParams(location.search);
+  const browsing = location.pathname === '/products';
   const embedded = location.pathname === '/account' && query.get('embedded') === '1';
   const [locale, setLocale] = useState<Locale>(() => resolveLocale(query.get('locale') ?? preference('subscribe-locale') ?? navigator.language));
   const [theme, setTheme] = useState(() => ['light', 'dark', 'auto'].includes(query.get('theme') ?? '') ? query.get('theme')! : preference('moe-theme') ?? 'auto');
@@ -227,7 +246,7 @@ export default function App() {
   const [actionError, setActionError] = useState<unknown>();
   const initialLoginChecked = useRef(false);
   const t = messages[locale];
-  useEffect(() => { document.documentElement.lang = locale; document.title = `${t.subscriptions} · moeSegFault`; persist('subscribe-locale', locale); }, [locale, t]);
+  useEffect(() => { document.documentElement.lang = locale; document.title = `${browsing ? t.catalog : t.subscriptions} · moeSegFault`; persist('subscribe-locale', locale); }, [locale, t, browsing]);
   useEffect(() => { document.documentElement.dataset.moeTheme = theme; persist('moe-theme', theme); }, [theme]);
   function onAuthenticationFailure(error: unknown) {
     const current = { session, billing };
@@ -243,7 +262,7 @@ export default function App() {
   async function load() {
     setLoading(true); setLoadError(undefined);
     try {
-      const account = request<Session>(`/api/session${location.search}`).then(async nextSession => ({ session: nextSession, billing: nextSession.authenticated ? await request<Billing>('/api/billing') : undefined }));
+      const account = request<Session>(`/api/session${location.search}`).then(async nextSession => ({ session: nextSession, billing: nextSession.authenticated && !browsing ? await request<Billing>('/api/billing') : undefined }));
       const [next, catalog] = await Promise.all([account, request<{ plans: Plan[] }>('/api/catalog')]);
       setSession(next.session); setBilling(next.billing); setPlans(catalog.plans);
     } catch (error) { setLoadError(error); onAuthenticationFailure(error); }
@@ -254,8 +273,8 @@ export default function App() {
     if (loading || !session || initialLoginChecked.current) return;
     initialLoginChecked.current = true;
     if (session.authenticated) resetAutomaticLogin();
-    else if (!loadError && claimAutomaticLogin(location.search, embedded)) location.assign(loginPath(location.search));
-  }, [loading, session, loadError, embedded]);
+    else if (!browsing && !loadError && claimAutomaticLogin(location.search, embedded)) location.assign(loginPath(location.search));
+  }, [loading, session, loadError, embedded, browsing]);
   async function logout() {
     setLogoutBusy(true); setActionError(undefined);
     try { await mutate('/auth/logout', 'POST', session?.csrfToken ?? ''); suppressAutomaticLogin(); setSession({ authenticated: false }); setBilling(undefined); }
@@ -264,27 +283,18 @@ export default function App() {
   }
   const requestedPlan = query.get('plan');
   const viewerName = session?.user?.name || billing?.account.profile.display_name;
-  const subscriptions = <section className="panel subscriptions-panel" id="subscriptions" aria-labelledby="subscriptions-title">
-    <div className="section-heading"><h2 id="subscriptions-title" className={embedded ? '' : 'sr-only'}>{t.subscriptions}</h2><button className="text-button refresh-button" onClick={() => void refreshBilling()}>{t.refresh}</button></div>
-    {embedded && <p className="viewer muted">{t.signedInAs}: <strong>{session?.user?.name || session?.user?.sub}</strong></p>}
-    {billing && <SubscriptionList subscriptions={billing.subscriptions} plans={plans} locale={locale} embedded={embedded} />}
-    {embedded && <div className="embed-actions"><a className="moe-button" href="/" target="_top">{t.manage} <span aria-hidden="true">↗</span></a><a href="/auth/login?path=%2Faccount&prompt=select_account" target="_top">{t.reconnect}</a></div>}
-  </section>;
   const feedback = <><AuthRecovery search={location.search} locale={locale} authenticated={session?.authenticated ?? false} embedded={embedded} /><Notice error={actionError} locale={locale} />{loading && <div className="panel loading" role="status"><span className="loading-dot" aria-hidden="true" />{t.loading}</div>}{!loading && loadError && <div className="panel"><Notice error={loadError} locale={locale} /><button className="moe-button" onClick={() => void load()}>{t.retry}</button></div>}</>;
   const login = !loading && session && !session.authenticated && <section className="panel login-panel"><span className="login-emblem" aria-hidden="true">◇</span><h2>{t.loginTitle}</h2><a className="moe-button" href={loginPath(location.search)} target={embedded ? '_top' : undefined}>{t.signIn} <span aria-hidden="true">↗</span></a></section>;
-  if (embedded) return <main className="embed-shell"><h1 className="sr-only">{t.accountTitle}</h1>{feedback}{login}{!loading && session?.authenticated && subscriptions}</main>;
+  if (embedded) return <main className="embed-shell"><h1 className="sr-only">{t.accountTitle}</h1>{feedback}{login}{!loading && session?.authenticated && <SubscriptionPanel billing={billing} plans={plans} locale={locale} session={session} embedded onRefresh={refreshBilling} />}</main>;
   return <div className="app-shell">
     <a className="skip-link" href="#main">{t.subscriptions}</a>
     <header className="site-header"><a className="brand" href="/" aria-label="moeSegFault Subscribe"><span className="brand-mark" aria-hidden="true"><img src="/style/v0.1.2/icons/brand.svg" alt="" /></span><span>moeSegFault<span className="brand-product">Subscribe</span></span></a>
       <div className="header-controls"><label className="sr-only" htmlFor="language">{t.language}</label><select id="language" value={locale} onChange={event => setLocale(event.target.value as Locale)}><option value="zh-CN">简体中文</option><option value="ja">日本語</option><option value="en">English</option></select><label className="sr-only" htmlFor="theme">{t.theme}</label><select id="theme" value={theme} onChange={event => setTheme(event.target.value)}><option value="auto">◐ {t.auto}</option><option value="light">☀ {t.light}</option><option value="dark">☾ {t.dark}</option></select>{session?.authenticated && <button className="text-button" disabled={logoutBusy} onClick={() => void logout()}>{t.signOut}</button>}</div>
     </header>
-    <main id="main"><div className="page-heading"><div><h1>{t.accountTitle}</h1>{viewerName && <p className="account-name">{viewerName}</p>}</div><a className="browse-link" href="#products">{t.catalog} <span aria-hidden="true">↓</span></a></div>
+    <main id="main"><div className="page-heading"><div><h1>{browsing ? t.catalog : t.accountTitle}</h1>{!browsing && viewerName && <p className="account-name">{viewerName}</p>}</div><a className="browse-link" href={browsing ? "/" : "/products"}>{browsing ? t.accountTitle : t.browseProducts} <span aria-hidden="true">{browsing ? "←" : "↗"}</span></a></div>
       {feedback}
-      {!loading && <div className={"dashboard " + (session?.authenticated ? "" : "guest-dashboard")}>{login}{session?.authenticated && subscriptions}
-        {session?.authenticated && <ActivationForm session={session} locale={locale} onActivated={refreshBilling} onAuthenticationFailure={onAuthenticationFailure} />}
-        <ProductCatalog plans={plans} locale={locale} authenticated={session?.authenticated ?? false} requestedPlan={requestedPlan} />
-        {session?.authenticated && billing && <ProfileForm key={billing.account.id} initial={billing.account.profile} session={session} locale={locale} onAuthenticationFailure={onAuthenticationFailure} />}
-      </div>}
+      {!loading && (browsing ? <ProductCatalog plans={plans} locale={locale} authenticated={session?.authenticated ?? false} requestedPlan={requestedPlan} showHeading={false} /> : <>{login}{session?.authenticated && billing && <AccountDashboard billing={billing} plans={plans} locale={locale} session={session} onRefresh={refreshBilling} onAuthenticationFailure={onAuthenticationFailure} />}</>)}
+
     </main>
     <footer className="site-footer"><span>© {new Date().getFullYear()} moeSegFault</span><a href="mailto:subscribe@moesegfault.dev">{t.support} <span aria-hidden="true">↗</span></a></footer>
   </div>;

@@ -20,7 +20,8 @@ refresh failure does not retroactively mark a successfully activated plan failed
 
 ## UI surfaces
 
-- `/`: catalog, subscription status, activation code, billing profile, local logout.
+- `/`: only the account’s actual subscriptions, activation code, one billing address, and local logout.
+- `/products`: explicit product discovery with grouped active plans; no subscription list, activation form, or billing-address panel. Navigation returns to `/`; authenticated plan actions lead to /#activate.
 - `/account?embedded=1&locale=ja&theme=dark`: read-only subscription list with an
   explicit **subscription service account** identity and top-level management link.
   This identity is the BFF OIDC session; it is not assumed equal to Identity's
@@ -115,16 +116,17 @@ The domain cardinality is reflected directly in layout, not instructional copy:
 - The account's subscriptions are the primary content. Each row presents product,
   plan, expiry, and status. Internal subject/product/plan identifiers are not
   ordinary customer-facing labels; the embedded Account identity remains explicit.
-- The catalog groups active plans under products. All tier names and durations
+- The separate `/products` catalog groups active plans under products. All tier names and durations
   remain visible; native `details` exposes the deployment-owned complete plan
   description and activation link. Descriptions retain pricing and settlement
   distinctions, without duplicating them across the default view.
 - Activation is a compact action alongside subscriptions, not a numbered stage in
   a fictitious linear onboarding process. Catalog selection is context only;
   codes remain authoritative. The accepted continuation remains durable navigation.
-- DOM order is subscriptions, activation, catalog, billing address. CSS grid places
-  account actions alongside product content on desktop; mobile uses the same DOM
-  order, preserving keyboard order without visually reordered interactive content.
+- Default-account DOM order is subscriptions, activation, billing address. CSS grid
+  places account actions alongside subscriptions on desktop; mobile uses the same
+  DOM order. Product discovery is a separate navigation destination, not a panel
+  beside account-owned subscriptions. A public catalog entry does not trigger automatic SSO.
 
 Known product names (Platform, amail, Agents) are display-only mappings. Grouping
 always uses stable `product_id`, never translated text; future identifiers receive
@@ -177,3 +179,23 @@ Design rationale and external references:
   information-foraging models frame interface structure as a cost/value trade-off.
   Here the practical hypothesis is that grouping tiers by product reduces scanning
   cost; no unmeasured user-study or conversion improvement is claimed.
+
+### Product discovery is not account ownership
+
+The account dashboard never derives subscription rows from the catalog and never
+shows unrelated, unenabled products as default content. Only Billing's actual
+subscriptions array creates those rows. Expired subscriptions and subscriptions
+whose plans are no longer active remain visible; plan availability controls discovery,
+not account history. The catalog is still fetched as metadata for authentic subscription
+names, but only the explicit /products surface renders product cards. It does not
+fetch the private billing aggregate and is browsable without automatic sign-in.
+
+The account's Browse products link opens /products; the catalog's Your subscriptions
+link returns to /. Discovery uses native plan detail controls, preserves complete
+terms and prices, and links authenticated activation actions to /#activate.
+
+The focused suite now has 39 cases. Added regressions prove that all seven catalog
+plans produce zero subscription rows and zero product offerings on an empty account;
+that real expired/retired history remains visible without unowned products; and that
+catalog actions navigate to the separate account activation surface. Production build
+passed (227.87 kB JavaScript / 72.69 kB gzip; 10.49 kB CSS / 2.74 kB gzip).

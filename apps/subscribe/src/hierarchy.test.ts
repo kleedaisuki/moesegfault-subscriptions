@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { ProductCatalog, ProfileForm, SubscriptionList, claimAutomaticLogin, groupPlans, productName, resetAutomaticLogin, suppressAutomaticLogin } from './App';
+import { AccountDashboard, ProductCatalog, ProfileForm, SubscriptionList, claimAutomaticLogin, groupPlans, productName, resetAutomaticLogin, suppressAutomaticLogin } from './App';
 import { keepBillingDraft, takeBillingDraft } from './billingDraft';
-import type { BillingProfile, Plan, Subscription } from './api';
+import type { Billing, BillingProfile, Plan, Subscription } from './api';
 
 const plans: Plan[] = JSON.parse(readFileSync(new URL('../../../infra/plans.staging.json', import.meta.url), 'utf8'));
 const profile: BillingProfile = { display_name: 'Test Payer', email: 'payer@example.test', country: 'SG', address_line1: 'One test street', address_line2: '', city: 'Singapore', postal_code: '123456', tax_id: '' };
@@ -45,6 +45,41 @@ describe('account and product hierarchy', () => {
     expect(html.match(/status-active/g)).toHaveLength(2);
     expect(html).not.toContain('amail-lite');
     expect(html).not.toContain('agents-go');
+  });
+
+  it('does not turn the seven-plan catalog into subscriptions or unrelated account offerings', () => {
+    const billing: Billing = { account: { id: 'payer', profile, created_at: 1800000000, updated_at: 1800000000 }, subscriptions: [] };
+    const html = renderToStaticMarkup(createElement(AccountDashboard, { billing, plans, locale: 'en', session: { authenticated: true, user: { sub: 'payer' } }, onRefresh: async () => {}, onAuthenticationFailure: () => {} }));
+    expect(plans).toHaveLength(7);
+    expect(html).toContain('No subscriptions yet');
+    expect(html).not.toContain('subscription-row');
+    expect(html).not.toContain('product-card');
+    expect(html).not.toContain('plan-option');
+    expect(html).not.toContain('id="products"');
+    expect(html).not.toContain('amail');
+    expect(html).not.toContain('Agents');
+    expect(html).toContain('id="activate"');
+    expect(html.match(/id="profile"/g)).toHaveLength(1);
+  });
+
+  it('keeps actual expired and retired subscriptions without showing unowned catalog products', () => {
+    const retired = { ...plans[0], active: false };
+    const subscriptions: Subscription[] = [{ id: 'real-history', product_id: retired.product_id, plan_id: retired.id, status: 'expired', current_period_start: 1700000000, current_period_end: 1701000000, activation_source: 'activation_code' }];
+    const billing: Billing = { account: { id: 'payer', profile, created_at: 1800000000, updated_at: 1800000000 }, subscriptions };
+    const html = renderToStaticMarkup(createElement(AccountDashboard, { billing, plans: [retired, ...plans.slice(1)], locale: 'en', session: { authenticated: true, user: { sub: 'payer' } }, onRefresh: async () => {}, onAuthenticationFailure: () => {} }));
+    expect(html.match(/class="subscription-row"/g)).toHaveLength(1);
+    expect(html).toContain(retired.name.en);
+    expect(html).toContain('Expired');
+    expect(html).not.toContain('amail');
+    expect(html).not.toContain('Agents');
+  });
+
+  it('links discovered authenticated plans to the account activation surface', () => {
+    const html = renderToStaticMarkup(createElement(ProductCatalog, { plans, locale: 'en', authenticated: true, showHeading: false }));
+    expect(html.match(/href="\/#activate"/g)).toHaveLength(7);
+    expect(html).not.toContain('id="subscriptions"');
+    expect(html).not.toContain('id="profile"');
+    expect(html).not.toContain('id="activate"');
   });
 
   it('routes empty embedded subscription CTA out of the frame', () => {
