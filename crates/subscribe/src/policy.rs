@@ -63,6 +63,23 @@ mod tests {
         ));
     }
     #[test]
+    fn agents_return_rejects_origin_wildcards_and_environment_drift() {
+        let destination = "https://adash-staging.moesegfault.dev/billing/return";
+        let list = vec![destination.into()];
+        assert!(return_allowed(destination, &list));
+        for value in [
+            "https://adash.moesegfault.dev/billing/return",
+            "http://adash-staging.moesegfault.dev/billing/return",
+            "https://adash-staging.moesegfault.dev/",
+            "https://adash-staging.moesegfault.dev/billing/return?plan=agents-pro",
+            "https://adash-staging.moesegfault.dev/billing/return#usage",
+            "https://user@adash-staging.moesegfault.dev/billing/return",
+            "https://adash-staging.moesegfault.dev.evil.test/billing/return",
+        ] {
+            assert!(!return_allowed(value, &list), "{value}");
+        }
+    }
+    #[test]
     fn idempotency_is_bounded() {
         assert!(idempotency_key("activation-123"));
         assert!(!idempotency_key("short"));

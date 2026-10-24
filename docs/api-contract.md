@@ -16,6 +16,32 @@ or internal claims. If sector sharing or the required delegation is unsupported
 or undesirable, request an explicit Identity contract decision and user approval
 before changing the Identity service. See the [consumer onboarding reference](../skills/moesegfault-billing/references/consumers.md#pairwise-subjects-and-application-onboarding).
 
+## Product ownership
+
+```text
+Identity principal (issuer, sub)
+└── BillingAccount
+    ├── profile: one account-wide billing contact/address
+    └── subscriptions: one per product, many products per account
+        └── plan_id: selected plan and snapshotted entitlements
+
+Product (product_id)
+└── plans: multiple deployment-owned Plan records
+```
+
+The profile is not copied into products or subscriptions. Changing the billing
+address affects the account, not authentication or grant ownership. Catalog plans
+are choices for a product, not separate products or proof of purchase. A stored
+subscription may refer to an inactive or removed catalog plan; its immutable
+identifier, period and entitlement snapshot remain authoritative. Present it even
+when catalog display metadata is unavailable.
+
+Identity owns authentication and its SSO session; Subscribe owns the browser BFF
+session and management UI; Billing owns the account, address and grants. Consumer
+services authorize against grants, not Subscribe navigation or billing contact
+fields. In particular, amail's explicit hosted authorization binds an amail owner
+to a payer with human consent; it is not an email-based account merge.
+
 ## API
 
 All time fields are integer Unix seconds. Authenticated operations use

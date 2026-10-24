@@ -14,9 +14,12 @@ use worker::*;
 /// This is an unauthenticated transaction deadline, never an access-token/session lifetime.
 const PREAUTH_TTL_SECONDS: i64 = 30 * 60;
 
+// Older embedded Account clients use reconnect=1 to explicitly replace the account.
+const ACCOUNT_RECONNECT_LOGIN: &str = "/auth/login?path=/account&prompt=select_account";
+
 /// Cloudflare entrypoint. Internal failures deliberately reveal no credentials or provider body.
 #[event(fetch)]
-pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
+pub async fn main(req: Request, env: Env, ctx: Context) -> Result<Response> {
     let mut req = req.clone_mut()?;
     let started = Date::now().as_millis();
     let incoming_parent = req.headers().get("traceparent")?;
@@ -39,7 +42,7 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         || path.starts_with("/amail/authorize/");
     let operation = telemetry_operation(&path);
     let trace_query = path == "/v1/service/amail/trace-query";
-    let result = route(req, &env).await;
+    let result = route(req, &env, &ctx).await;
     let mut response = match result {
         Ok(response) => response,
         Err(Error::RustError(message)) if message == "ambiguous parameter" => {
@@ -74,8 +77,7 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
             parent_span: parent_span.as_deref(),
             started,
         }
-        .emit(&env, response.status_code())
-        .await;
+        .emit(&env, &ctx, response.status_code());
     }
     let account = env.var("ACCOUNT_ORIGIN")?.to_string();
     let parsed = url::Url::parse(&account)?;
@@ -87,7 +89,7 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
 }
 
 /// Dispatch a deliberately small API surface; caller-supplied identity headers are never forwarded.
-async fn route(mut req: Request, env: &Env) -> Result<Response> {
+async fn route(mut req: Request, env: &Env, ctx: &Context) -> Result<Response> {
     let url = req.url()?;
     let path = url.path();
     let now = Date::now().as_millis() as i64 / 1000;
@@ -111,11 +113,11 @@ async fn route(mut req: Request, env: &Env) -> Result<Response> {
         };
     }
     if req.method() == Method::Get && path == "/api/catalog" {
-        return proxy(&mut req, env, None, "/v1/plans").await;
+        return proxy(&mut req, env, ctx, None, "/v1/plans").await;
     }
     if !path.starts_with("/api/") && !path.starts_with("/auth/") {
         if path == "/account" && query(&url, "reconnect")? == Some("1".into()) {
-            return redirect(&format!("{app}/auth/login?path=/account"));
+            return redirect(&format!("{app}{ACCOUNT_RECONNECT_LOGIN}"));
         }
         let response = env
             .get_binding::<Fetcher>("ASSETS")?
@@ -151,15 +153,15 @@ async fn route(mut req: Request, env: &Env) -> Result<Response> {
         return problem(403, "csrf_failed", "Refresh this page and try again.");
     }
     if let Some(upstream) = amail_authorization_path(path, req.method()) {
-        return proxy(&mut req, env, Some(&session), &upstream).await;
+        return proxy(&mut req, env, ctx, Some(&session), &upstream).await;
     }
     match (req.method(), path) {
-        (Method::Get, "/api/billing") => proxy(&mut req, env, Some(&session), "/v1/me").await,
+        (Method::Get, "/api/billing") => proxy(&mut req, env, ctx, Some(&session), "/v1/me").await,
         (Method::Put, "/api/profile") => {
-            proxy(&mut req, env, Some(&session), "/v1/me/profile").await
+            proxy(&mut req, env, ctx, Some(&session), "/v1/me/profile").await
         }
         (Method::Post, "/api/activate") => {
-            proxy(&mut req, env, Some(&session), "/v1/activations").await
+            proxy(&mut req, env, ctx, Some(&session), "/v1/activations").await
         }
         (Method::Post, "/auth/logout") => {
             env.d1("SESSIONS")?
@@ -336,7 +338,7 @@ impl TelemetrySpan<'_> {
     }
 
     /// Emit an independently identifiable closed span, never arbitrary structured log fields.
-    async fn emit(&self, env: &Env, status: u16) -> Result<()> {
+    fn emit(&self, env: &Env, ctx: &Context, status: u16) -> Result<()> {
         let mut bytes = [0u8; 16];
         getrandom::getrandom(&mut bytes)
             .map_err(|_| Error::RustError("entropy unavailable".into()))?;
@@ -373,10 +375,13 @@ impl TelemetrySpan<'_> {
             (self.started + TRACE_RETENTION_MS) as f64,
         ));
         let db = env.d1("SESSIONS")?;
-        db.batch(vec![
+        let statements = vec![
             db.prepare("DELETE FROM subscribe_trace_spans WHERE event_id IN (SELECT event_id FROM subscribe_trace_spans WHERE expires_at_ms<=?1 LIMIT 128)").bind(&[JsValue::from_f64(finished as f64)])?,
             db.prepare("INSERT INTO subscribe_trace_spans(schema_version,event_id,service,operation,phase,trace_id,span_id,parent_span_id,occurred_at_ms,duration_ms,outcome,http_status,expires_at_ms) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)").bind(&values)?,
-        ]).await?;
+        ];
+        ctx.wait_until(async move {
+            let _ = db.batch(statements).await;
+        });
         Ok(())
     }
 }
@@ -523,6 +528,10 @@ async fn login(req: &Request, env: &Env, now: i64) -> Result<Response> {
             .map(|q| format!("?{q}"))
             .unwrap_or_default()
     );
+    let prompt = query(&url, "prompt")?;
+    if !login_prompt_valid(prompt.as_deref()) {
+        return problem(400, "invalid_prompt", "Invalid sign-in request.");
+    }
     let discovery = oidc::discover(env).await?;
     let state = crypto::random()?;
     let browser = crypto::random()?;
@@ -549,11 +558,19 @@ async fn login(req: &Request, env: &Env, now: i64) -> Result<Response> {
         ("code_challenge", &crypto::hash(&verifier)),
         ("code_challenge_method", "S256"),
     ]);
+    if let Some(prompt) = prompt {
+        authorize.query_pairs_mut().append_pair("prompt", &prompt);
+    }
     let mut response = redirect(authorize.as_str())?;
     response
         .headers_mut()
         .append("Set-Cookie", &login_cookie(&browser, PREAUTH_TTL_SECONDS))?;
     Ok(response)
+}
+
+/// Only explicit account switching overrides normal Identity SSO reuse.
+fn login_prompt_valid(prompt: Option<&str>) -> bool {
+    matches!(prompt, None | Some("select_account"))
 }
 
 /// Consume state atomically, verify both token kinds, and create a bounded application session.
@@ -738,6 +755,7 @@ fn session_expiry(id: i64, access: i64, now: i64) -> i64 {
 async fn proxy(
     req: &mut Request,
     env: &Env,
+    ctx: &Context,
     session: Option<&store::Session>,
     path: &str,
 ) -> Result<Response> {
@@ -805,12 +823,12 @@ async fn proxy(
     }
     .emit(
         env,
+        ctx,
         result
             .as_ref()
             .map(|response| response.status_code())
             .unwrap_or(503),
-    )
-    .await;
+    );
     let upstream = result?;
     if req.method() == Method::Get && session.is_some() && upstream.status_code() == 200 {
         if let Some(id) = upstream_authorization_id(path) {
@@ -1070,6 +1088,30 @@ mod tests {
         assert_eq!(destination.query(), None);
     }
 
+    #[test]
+    fn legacy_account_reconnect_explicitly_bypasses_session_reuse() {
+        let url = url::Url::parse(&format!(
+            "https://subscribe.example{ACCOUNT_RECONNECT_LOGIN}"
+        ))
+        .unwrap();
+        assert_eq!(url.path(), "/auth/login");
+        assert_eq!(query(&url, "path").unwrap().as_deref(), Some("/account"));
+        let prompt = query(&url, "prompt").unwrap();
+        assert_eq!(prompt.as_deref(), Some("select_account"));
+        assert!(login_prompt_valid(prompt.as_deref()));
+        assert!(
+            prompt.is_some(),
+            "explicit reconnect must bypass the valid-session shortcut"
+        );
+    }
+    #[test]
+    fn login_defaults_to_sso_and_only_explicit_account_switch_forces_selection() {
+        assert!(login_prompt_valid(None));
+        assert!(login_prompt_valid(Some("select_account")));
+        for prompt in ["login", "none", "", "select_account login", "unexpected"] {
+            assert!(!login_prompt_valid(Some(prompt)));
+        }
+    }
     #[test]
     fn expires_with_earliest_credential() {
         assert_eq!(session_expiry(200, 300, 100), 200);

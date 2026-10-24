@@ -30,7 +30,7 @@ The current Identity contract uses pairwise subjects and fixes access-token audi
 
 Billing calls use Cloudflare's HTTP service binding, not public-origin forwarding. Browser-provided Authorization and principal headers are not forwarded. Proxy routes are explicit; this is not a general-purpose authenticated URL fetcher. OAuth endpoint errors and Billing problem JSON stay distinct. Correlation IDs are retained without logging tokens, codes, cookies or personal data.
 
-External app return URLs must exactly match `RETURN_URL_ALLOWLIST`. Login redirect URI is always fixed; a return destination is transaction/session state. Login lands on Subscribe first. The UI offers the accepted continuation after successful activation, and does not describe a return URL as proof of payment or entitlement; the requesting application must re-check Billing itself.
+External app return URLs must exactly match `RETURN_URL_ALLOWLIST`. Login redirect URI is always fixed; a return destination is transaction/session state. Login lands on Subscribe first. The UI offers the accepted continuation independently of transient activation-success state, and does not describe a return URL as proof of payment or entitlement; the requesting application must re-check Billing itself.
 
 ## Account section: unavoidable identity distinction
 
@@ -93,3 +93,107 @@ Identity's approved registration flow can legitimately consume an initial five-m
 The BFF now uses the single `PREAUTH_TTL_SECONDS = 30 * 60` constant for both its server-side login transaction deadline and browser-bound login cookie. The extra five minutes provides bounded navigation/processing margin. Transactions remain single-use, browser-bound and cleaned up after expiry; successful and failed callbacks clear their cookie. This extends only unauthenticated registration opportunity, not authenticated privilege. The actual provider access-token lifetime (300 seconds), local session cap, nonce/issuer/audience checks and no-refresh/no-`offline_access` policy are unchanged.
 
 Focused validation passed nine Rust tests (including registration budget/cookie equality and the unchanged token-limited session expiry) in 1.24 seconds incremental compilation, plus WASM checking in 0.47 seconds. No unrelated frontend suite or release build was run for this constant-only behavioral change.
+
+
+## SSO entry and response-path costs (2026-10-24)
+
+A valid Identity browser session and a valid Subscribe session are different
+boundaries. Identity's authorization handler reuses its own session unless the
+request explicitly selects another account. Subscribe must initiate the ordinary
+top-level OIDC flow on an integration handoff; displaying a second sign-in gate
+before that flow adds user work without adding authentication assurance. No shared
+parent-domain cookie, email join, or cross-origin token bridge is needed.
+
+The normal `/auth/login` entry validates all context and always starts fresh
+browser-bound state/nonce/PKCE; Identity can reuse its own SSO session without
+asking for credentials. Already authenticated portal loads do not call this route.
+Explicit `prompt=select_account` is forwarded to Identity; other prompt values and
+duplicates are rejected. Failed authentication must not restart automatic SSO;
+embedded Account views must use top-level navigation.
+
+A proposed local-session shortcut was removed during integration review. Existing
+Account clients use `/auth/login?path=/account&return_to=...` to reconnect to the
+current Identity principal. Reusing an older Subscribe session there would preserve
+the wrong account after an Identity account switch. Keeping explicit login as an
+OIDC transaction eliminates that compatibility special case instead of teaching
+every existing caller a new reconnect parameter.
+
+The local session still cannot outlive either verified token. Live staging
+Discovery advertises refresh tokens and offline_access, but Subscribe's reviewed
+client registration grants only openid/profile. A durable refresh session would
+also require cross-isolate atomic refresh ownership, token-set replacement,
+unknown-outcome handling, and logout revocation. Extending the cookie beyond an
+access token without that machinery would only hide expiry until Billing rejects
+it. This iteration therefore preserves the token boundary and relies on bounded
+SSO re-entry rather than silently requesting a new permission.
+
+OIDC discovery now caches a single validated, exact-issuer entry per isolate for
+300 seconds. Cold reads stream at most 64 KiB; non-200 responses, redirects, issuer
+mismatches and foreign/credential-bearing/fragment-bearing endpoints remain
+rejected. Cache expiry is strict, issuer changes miss the cache, and fetch failures
+never extend old metadata. Login followed by callback within the warm window
+avoids the callback's previously redundant discovery network round trip.
+
+Subscribe's request and Billing-dependency telemetry writes now use the platform
+Context.wait_until lifetime rather than awaiting D1 writes on the browser response
+path. Span timestamps are captured before scheduling, preserving actual request
+and dependency duration. Server-owned authorization trace ancestry remains a
+synchronous business dependency so a following approval can recover its parent.
+Telemetry remains bounded, private and best-effort; immediate trace retrieval may
+race the background write and must tolerate eventual visibility.
+
+Rationale: [OpenID Connect Core authentication request](https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest)
+distinguishes normal SSO from explicit account selection. The production mechanism
+for detached response-independent work is
+[Cloudflare Context.wait_until](https://developers.cloudflare.com/workers/runtime-apis/context/#waituntil).
+For the research perspective, the formal OAuth analysis linked above distinguishes
+session integrity from authentication: eliminating a second UI gate must retain
+browser transaction binding and explicit account ownership, not merge principals.
+
+Focused verification: 19 Subscribe native tests passed, including strict metadata
+cache expiry/issuer isolation, endpoint validation, allowed prompt selection,
+CSRF, callback ambiguity, safe continuations and the unchanged token expiry.
+The WASM target check passed. The repository's real-workerd metadata regression
+and actual SQLite session/single-use transaction checks passed 4/4. These checks
+establish local invariants; hosted browser SSO and measured latency acceptance
+belong to the integrated staging run, not to this module-only result.
+
+The established Account integration entry `/account?reconnect=1` remains an
+explicit account switch: it redirects to `/auth/login?path=/account&prompt=select_account`,
+with explicit account selection. This preserves older embedded clients'
+reconnect behavior even while their current Subscribe cookie is still valid.
+
+## Agents round trip
+
+Agents links to Subscribe with `app=agents` and a return destination fixed by its
+server configuration. Staging registers exactly
+`https://adash-staging.moesegfault.dev/billing/return` alongside the existing Account
+destination. The separately authorized production release registers only
+`https://adash.moesegfault.dev/billing/return` alongside its existing Account
+destination; its publication and actual readback are recorded in the production
+deployment notes, not inferred from the earlier staging acceptance.
+This is an application continuation, not another registered OAuth redirect URI;
+the existing exact `/auth/callback` and issuer/client registration are unchanged.
+
+The return action is ordinary navigation, not proof that a plan was purchased.
+Agents authenticates its own browser session, forces a Billing read through its
+token-owning AuthSession Durable Object, and only then returns to `/#usage`.
+This bypasses Agents' normal 60-second snapshot freshness window without trusting
+browser-supplied tiers or extending grant validity. Unavailable or malformed
+Billing responses retain the prior verified snapshot and show retryable failure.
+
+Subscribe carries only `app`, `plan`, and `return_to` through its local account,
+catalog, brand and activation links. These are same-origin navigation hints;
+the BFF validates the destination on entry and only the session's accepted
+`returnTo` becomes the external link. OAuth codes, state, tokens and CSRF fields
+are not forwarded. A catalog detour therefore cannot silently change a returning
+Agents user into an Account continuation or lose the return action.
+
+The fixed entry/return boundaries follow the existing
+[OIDC authentication request contract](https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest).
+Do not rely on [window-focus cache refetch](https://tanstack.com/query/latest/docs/framework/react/guides/window-focus-refetching)
+to establish this workflow: query freshness and server snapshot freshness are
+different layers. A same-tab full return plus an explicit authoritative read
+eliminates both stale-client and stale-server special cases. The formal OAuth
+analysis linked above motivates keeping session integrity separate from business
+authorization; a successful browser return never joins accounts or grants a tier.

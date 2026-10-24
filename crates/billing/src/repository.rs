@@ -63,14 +63,26 @@ fn statement(db: &D1Database, sql: &str, values: &[Value]) -> Result<D1PreparedS
     db.prepare(sql).bind(&args)
 }
 
-/// Creates the principal's account idempotently; uniqueness prevents parallel first-login duplicates.
+/// Existing accounts are read-only; uniqueness arbitrates concurrent first logins.
 pub async fn ensure_account(db: &D1Database, issuer: &str, subject: &str) -> Result<Account> {
+    if let Some(row) = find_account(db, issuer, subject).await? {
+        return account(row);
+    }
     let now = domain::now();
-    statement(db, "INSERT INTO billing_accounts(id,issuer,subject,created_at,updated_at) VALUES(?1,?2,?3,?4,?4) ON CONFLICT(issuer,subject) DO NOTHING",
-        &[json!(domain::random_token()?),json!(issuer),json!(subject),json!(now)])?.run().await?;
-    let row = statement(db, "SELECT id,profile_json,created_at,updated_at FROM billing_accounts WHERE issuer=?1 AND subject=?2",
-        &[json!(issuer),json!(subject)])?.first::<AccountRow>(None).await?.ok_or_else(|| worker::Error::RustError("account_missing".into()))?;
+    let inserted = statement(db, "INSERT INTO billing_accounts(id,issuer,subject,created_at,updated_at) VALUES(?1,?2,?3,?4,?4) ON CONFLICT(issuer,subject) DO NOTHING RETURNING id,profile_json,created_at,updated_at",
+        &[json!(domain::random_token()?),json!(issuer),json!(subject),json!(now)])?.first::<AccountRow>(None).await?;
+    if let Some(row) = inserted {
+        return account(row);
+    }
+    let row = find_account(db, issuer, subject)
+        .await?
+        .ok_or_else(|| worker::Error::RustError("account_missing".into()))?;
     account(row)
+}
+
+async fn find_account(db: &D1Database, issuer: &str, subject: &str) -> Result<Option<AccountRow>> {
+    statement(db, "SELECT id,profile_json,created_at,updated_at FROM billing_accounts WHERE issuer=?1 AND subject=?2",
+        &[json!(issuer),json!(subject)])?.first(None).await
 }
 
 /// Decodes validated stored account JSON; corruption is an operational failure, not an empty profile.
@@ -85,21 +97,14 @@ fn account(row: AccountRow) -> Result<Account> {
 
 /// Replaces the profile atomically; only the authenticated account id is accepted.
 pub async fn save_profile(db: &D1Database, id: &str, profile: &BillingProfile) -> Result<Account> {
-    statement(
+    let row = statement(
         db,
-        "UPDATE billing_accounts SET profile_json=?2,updated_at=?3 WHERE id=?1",
+        "UPDATE billing_accounts SET profile_json=?2,updated_at=?3 WHERE id=?1 RETURNING id,profile_json,created_at,updated_at",
         &[
             json!(id),
             json!(serde_json::to_string(profile)?),
             json!(domain::now()),
         ],
-    )?
-    .run()
-    .await?;
-    let row = statement(
-        db,
-        "SELECT id,profile_json,created_at,updated_at FROM billing_accounts WHERE id=?1",
-        &[json!(id)],
     )?
     .first::<AccountRow>(None)
     .await?

@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { ApiError, loginPath, mutate, request, type Plan, type Session, type Subscription } from './api';
-import { ActivationForm, authRecoveryCode, errorMessage, periodDate } from './App';
+import { ActivationForm, authRecoveryCode, claimAutomaticLogin, resetAutomaticLogin, errorMessage, periodDate } from './App';
 
 /** Billing presents an opaque transaction, never an agent token or an OAuth credential. */
 export interface AmailAuthorizationView {
@@ -86,6 +86,7 @@ export function AuthorizationDetails({ view, payer }: { view: AmailAuthorization
 export default function AmailAuthorization() {
   const id = authorizationId(location.pathname);
   const login = loginPath(location.search, location.pathname);
+  const switchLogin = login + (login.includes('?') ? '&' : '?') + 'prompt=select_account';
   const [session, setSession] = useState<Session>();
   const [view, setView] = useState<AmailAuthorizationView>();
   const [plan, setPlan] = useState('amail-free');
@@ -116,7 +117,8 @@ export default function AmailAuthorization() {
     void (async () => {
       try {
         const next = await request<Session>('/api/session'); setSession(next);
-        if (next.authenticated) await refresh(true);
+        if (next.authenticated) { resetAutomaticLogin(); await refresh(true); }
+        else if (claimAutomaticLogin(location.search, false)) location.assign(login);
       } catch (failure) { failed(failure); }
       finally { setLoaded(true); }
     })();
@@ -137,7 +139,7 @@ export default function AmailAuthorization() {
   return <div className="app-shell authorization-shell"><header className="site-header"><a className="brand" href="/">moeSegFault Subscribe</a></header><main id="main">
     <section className="panel authorization-panel"><p className="eyebrow">amail / HUMAN AUTHORIZATION</p><h1>授权 amail 订阅</h1>
       {authRecoveryCode(location.search) && <p className="notice notice-error" role="alert">登录或切换账户未完成。当前显示的可能仍是之前的付款账户，请核对后重新登录。</p>}
-      {session?.authenticated && <a href={login}>切换 Billing 付款账户</a>}
+      {session?.authenticated && <a href={switchLogin}>切换 Billing 付款账户</a>}
       {!id && <p role="alert">授权链接无效，请让 Agent 重新发起请求。</p>}
       {!loaded && <p role="status">正在加载授权请求…</p>}
       {error !== undefined && <div className="notice notice-error" role="alert"><p>{error instanceof ApiError && error.code.includes('activation') ? '请先使用对应套餐激活码开通，再重试授权。' : errorMessage(error, 'zh-CN')}</p>{error instanceof ApiError && error.correlationId && <small>支持参考：<code>{error.correlationId}</code></small>}<button className="moe-button" disabled={busy} onClick={() => { setError(undefined); void refresh().catch(failed); }}>重试加载</button></div>}

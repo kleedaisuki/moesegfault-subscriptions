@@ -54,6 +54,23 @@ test('billing accepts only registered staging audience and valid deployment-owne
   for (const secret of ['BILLING_ADMIN_KEY', 'ADMIN_EMAIL']) assert.equal(settings.vars[secret], undefined);
 });
 
+test('Agents returns use exact environment-paired destinations', async () => {
+  const staging = await config('subscribe');
+  const production = JSON.parse(await readFile(new URL('../../wrangler.subscribe.production.jsonc', import.meta.url), 'utf8'));
+  assert.deepEqual(JSON.parse(staging.vars.RETURN_URL_ALLOWLIST), [
+    'https://account-staging.moesegfault.dev/subscriptions',
+    'https://adash-staging.moesegfault.dev/billing/return',
+  ]);
+  assert.deepEqual(JSON.parse(production.vars.RETURN_URL_ALLOWLIST), [
+    'https://account.moesegfault.dev/subscriptions',
+    'https://adash.moesegfault.dev/billing/return',
+  ]);
+  const stagingReturns = JSON.parse(staging.vars.RETURN_URL_ALLOWLIST);
+  const productionReturns = JSON.parse(production.vars.RETURN_URL_ALLOWLIST);
+  assert.ok(stagingReturns.every(value => new URL(value).hostname.includes('-staging.')));
+  assert.ok(productionReturns.every(value => !new URL(value).hostname.includes('-staging.')));
+});
+
 test('catalog rejects duplicate IDs, missing localization, excessive duration, and unsafe entitlements', async () => {
   const plans = JSON.parse(await readFile(new URL('../../infra/plans.staging.json', import.meta.url), 'utf8'));
   assert.throws(() => validateCatalog([plans[0], plans[0]]), /duplicate/);

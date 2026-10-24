@@ -1,5 +1,24 @@
 # Production promotion
 
+## Authorized subscription experience and Agents return release — 2026-10-24
+
+The owner explicitly requested publication and confirmed that the complete Agents
+main version should ship after its staging gate passes. This authorizes the
+subscription UI/SSO/performance release and the coordinated application return
+`https://adash.moesegfault.dev/billing/return`, not a new OAuth callback, scope,
+subject sector, payment provider, activation issuance or spending authorization.
+The existing Account continuation remains accepted. Staging and production lists
+are exact, separately paired URLs; no origin wildcard is introduced.
+
+Merge the reviewed Subscribe PR, let that exact main commit complete its actual
+staging delivery, then use the existing main-only immutable-artifact promotion.
+Publish Subscribe's production allowlist before the Agents production app so its
+new return hint cannot be rejected. Agents must separately clear its full current
+staging gate before production delivery; the earlier roundtrip-only acceptance
+does not relabel the archive-failed deployment as green. Preserve every existing
+production D1, key, issuer, audience, catalog grant and service binding. Record
+actual release IDs and production browser readback below after execution.
+
 ## Current amail USD promotion authority — 2026-10-08 Asia/Singapore
 
 The owner now explicitly authorizes the accepted amail v0.2.0 USD bridge in
