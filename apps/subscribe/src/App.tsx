@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { ApiError, continuation, loginPath, mutate, request, type Billing, type BillingProfile, type Plan, type Session, type Subscription } from './api';
+import { ApiError, continuation, loginPath, portalPath, mutate, request, type Billing, type BillingProfile, type Plan, type Session, type Subscription } from './api';
 import { messages, persist, preference, resolveLocale, type Locale } from './i18n';
 import { clearBillingDraft, keepBillingDraft, takeBillingDraft } from './billingDraft';
 import './styles.css';
@@ -125,7 +125,7 @@ export function ProductCatalog({ plans, locale, authenticated, requestedPlan, sh
       <div className="product-heading"><span className="product-icon" aria-hidden="true">{productName(product.id, locale).slice(0, 1)}</span><h3>{productName(product.id, locale)}</h3></div>
       <div className="product-plans">{product.plans.map(plan => <details key={plan.id} className={"plan-option " + (requestedPlan === plan.id ? 'plan-requested' : '')} open={requestedPlan === plan.id || undefined}>
         <summary><span className="plan-name">{plan.name[locale] || plan.name.en}{requestedPlan === plan.id && <span className="requested-dot" aria-label={t.selected} />}</span><span className="plan-duration">{plan.duration_days} {t.days}</span><span className="disclosure" aria-hidden="true">⌄</span></summary>
-        <div className="plan-details"><p className="muted">{plan.description[locale] || plan.description.en}</p><a href={authenticated ? '/#activate' : loginPath(location.search)}>{t.useCode} <span aria-hidden="true">↗</span></a></div>
+        <div className="plan-details"><p className="muted">{plan.description[locale] || plan.description.en}</p><a href={authenticated ? `${portalPath('/', location.search)}#activate` : loginPath(location.search)}>{t.useCode} <span aria-hidden="true">↗</span></a></div>
       </details>)}</div>
     </article>)}</div>
   </section>;
@@ -288,10 +288,10 @@ export default function App() {
   if (embedded) return <main className="embed-shell"><h1 className="sr-only">{t.accountTitle}</h1>{feedback}{login}{!loading && session?.authenticated && <SubscriptionPanel billing={billing} plans={plans} locale={locale} session={session} embedded onRefresh={refreshBilling} />}</main>;
   return <div className="app-shell">
     <a className="skip-link" href="#main">{t.subscriptions}</a>
-    <header className="site-header"><a className="brand" href="/" aria-label="moeSegFault Subscribe"><span className="brand-mark" aria-hidden="true"><img src="/style/v0.1.2/icons/brand.svg" alt="" /></span><span>moeSegFault<span className="brand-product">Subscribe</span></span></a>
+    <header className="site-header"><a className="brand" href={portalPath('/', location.search)} aria-label="moeSegFault Subscribe"><span className="brand-mark" aria-hidden="true"><img src="/style/v0.1.2/icons/brand.svg" alt="" /></span><span>moeSegFault<span className="brand-product">Subscribe</span></span></a>
       <div className="header-controls"><label className="sr-only" htmlFor="language">{t.language}</label><select id="language" value={locale} onChange={event => setLocale(event.target.value as Locale)}><option value="zh-CN">简体中文</option><option value="ja">日本語</option><option value="en">English</option></select><label className="sr-only" htmlFor="theme">{t.theme}</label><select id="theme" value={theme} onChange={event => setTheme(event.target.value)}><option value="auto">◐ {t.auto}</option><option value="light">☀ {t.light}</option><option value="dark">☾ {t.dark}</option></select>{session?.authenticated && <button className="text-button" disabled={logoutBusy} onClick={() => void logout()}>{t.signOut}</button>}</div>
     </header>
-    <main id="main"><div className="page-heading"><div><h1>{browsing ? t.catalog : t.accountTitle}</h1>{!browsing && viewerName && <p className="account-name">{viewerName}</p>}</div><a className="browse-link" href={browsing ? "/" : "/products"}>{browsing ? t.accountTitle : t.browseProducts} <span aria-hidden="true">{browsing ? "←" : "↗"}</span></a></div>
+    <main id="main"><div className="page-heading"><div><h1>{browsing ? t.catalog : t.accountTitle}</h1>{!browsing && viewerName && <p className="account-name">{viewerName}</p>}</div><a className="browse-link" href={portalPath(browsing ? '/' : '/products', location.search)}>{browsing ? t.accountTitle : t.browseProducts} <span aria-hidden="true">{browsing ? "←" : "↗"}</span></a></div>
       {feedback}
       {!loading && (browsing ? <ProductCatalog plans={plans} locale={locale} authenticated={session?.authenticated ?? false} requestedPlan={requestedPlan} showHeading={false} /> : <>{login}{session?.authenticated && billing && <AccountDashboard billing={billing} plans={plans} locale={locale} session={session} onRefresh={refreshBilling} onAuthenticationFailure={onAuthenticationFailure} />}</>)}
 

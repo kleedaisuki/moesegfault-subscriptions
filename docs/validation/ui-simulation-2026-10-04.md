@@ -110,7 +110,7 @@ The runner owns an ephemeral loopback listener and an isolated browser context,
 then closes both. It never opens an existing browser profile, reads credentials,
 or contacts Identity/mail. `PLAYWRIGHT_MODULE` is a runtime path, not a new
 application dependency. Observed environment: Windows, Node 26.10.0, bundled
-Chromium 151.0.7922.34. The final execution passed 19 journey assertion groups
+Chromium 151.0.7922.34. The final execution passed 20 journey assertion groups
 with zero page errors, in approximately seven seconds.
 
 | Journey | Observed outcome |
@@ -118,7 +118,9 @@ with zero page errors, in approximately seven seconds.
 | Account/catalog separation | Default `/` shows only the two authoritative account subscriptions and one initially collapsed billing address, with zero catalog cards. Explicit Browse products navigation reaches `/products`, where three product cards contain 1/3/3 plans |
 | Empty account | An account with zero subscriptions still displays zero rows and zero product offerings even though the available catalog has seven plans |
 | Public product browsing | Authenticated and guest `/products` show no private subscription/address/activation forms and issue no `/api/billing` request; guest browsing does not start SSO |
-| Return navigation | Catalog navigation returns to subscription-only `/`; authenticated plan action targets `/#activate` |
+| Return navigation | Catalog navigation returns to subscription-only `/`; authenticated plan action targets `/?<integration hints>#activate` |
+| Agents continuation | Synthetic Agents app/plan/allowed return hints survive account → products → brand → account → products → activation and reload; Return to app stays the session-approved Agents URL; no subscription is fabricated |
+| Sensitive-parameter exclusion | Local portal links retain exactly app, plan and return_to; synthetic OAuth code/state/access_token/id_token/refresh_token plus auth_error/csrfToken are not forwarded |
 | Important terms | On `/products`, requested amail Plus disclosure opens and retains the complete real catalog overage/settlement terms |
 | Billing edit/save | Saved synthetic name, address and contact appear in one account summary; lowercase country becomes CN |
 | Cancel and native validation | Cancel discards unsaved edits; invalid email produces native typeMismatch and no additional profile PUT |
@@ -149,5 +151,5 @@ harness attempts and are not the basis of the final verdict.
 
 This runner does not establish actual cross-service SSO reuse, token expiry,
 mail delivery, entitlement enforcement, account-origin framing, or Cloudflare
-performance. Those require independent hosted acceptance. No payment or paid
+performance. Those require independent hosted acceptance. The Agents round-trip regression uses a synthetic session-approved return URL; it does not navigate to the real Agents service or prove its forced entitlement refresh. No payment or paid
 usage authorization is submitted by this test.

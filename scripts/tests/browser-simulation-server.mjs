@@ -16,6 +16,7 @@ export async function startFixture({ port = 4397, artifacts = resolve('.temp/ui-
   let subscriptions;
   let authenticated;
   let loadFailures;
+  let returnTo;
   const attempts = new Map();
   const events = [];
   function reset(seeded = false) {
@@ -23,6 +24,7 @@ export async function startFixture({ port = 4397, artifacts = resolve('.temp/ui-
     subscriptions = seeded ? [subscription('fixture-platform', 'moesegfault-platform', 'platform-monthly'), subscription('fixture-amail', 'amail', 'amail-free')] : [];
     authenticated = true;
     loadFailures = 0;
+    returnTo = 'https://example.com/fixture-complete';
     attempts.clear();
     events.length = 0;
   }
@@ -42,9 +44,11 @@ export async function startFixture({ port = 4397, artifacts = resolve('.temp/ui-
         await appendFile(resolve(artifacts, 'requests.jsonl'), JSON.stringify(event) + '\n');
       }
       if (url.pathname === '/api/session') {
+        const requestedReturn = url.searchParams.get('return_to');
+        if (requestedReturn === 'https://adash-staging.moesegfault.dev/billing/return') returnTo = requestedReturn;
         if (url.searchParams.get('scenario') === 'load-failure' && loadFailures++ === 0) return json(503, { error_code: 'temporarily_unavailable' });
         if (url.searchParams.get('scenario') === 'guest') authenticated = false;
-        return json(200, authenticated ? { authenticated: true, csrfToken: 'synthetic-csrf', user: { sub: 'fixture-user', name: 'UI Simulation' }, returnTo: 'https://example.com/fixture-complete' } : { authenticated: false });
+        return json(200, authenticated ? { authenticated: true, csrfToken: 'synthetic-csrf', user: { sub: 'fixture-user', name: 'UI Simulation' }, returnTo } : { authenticated: false });
       }
       if (url.pathname === '/api/catalog') return json(200, { plans: fixturePlans });
       if (url.pathname === '/auth/login') {

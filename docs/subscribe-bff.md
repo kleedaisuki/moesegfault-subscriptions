@@ -162,3 +162,34 @@ The established Account integration entry `/account?reconnect=1` remains an
 explicit account switch: it redirects to `/auth/login?path=/account&prompt=select_account`,
 with explicit account selection. This preserves older embedded clients'
 reconnect behavior even while their current Subscribe cookie is still valid.
+
+## Agents round trip
+
+Agents links to Subscribe with `app=agents` and a return destination fixed by its
+server configuration. Staging registers exactly
+`https://adash-staging.moesegfault.dev/billing/return` alongside the existing Account
+destination. Production's independent allowlist is unchanged; promoting the Agents
+feature requires a coordinated production allowlist update and acceptance.
+
+The return action is ordinary navigation, not proof that a plan was purchased.
+Agents authenticates its own browser session, forces a Billing read through its
+token-owning AuthSession Durable Object, and only then returns to `/#usage`.
+This bypasses Agents' normal 60-second snapshot freshness window without trusting
+browser-supplied tiers or extending grant validity. Unavailable or malformed
+Billing responses retain the prior verified snapshot and show retryable failure.
+
+Subscribe carries only `app`, `plan`, and `return_to` through its local account,
+catalog, brand and activation links. These are same-origin navigation hints;
+the BFF validates the destination on entry and only the session's accepted
+`returnTo` becomes the external link. OAuth codes, state, tokens and CSRF fields
+are not forwarded. A catalog detour therefore cannot silently change a returning
+Agents user into an Account continuation or lose the return action.
+
+The fixed entry/return boundaries follow the existing
+[OIDC authentication request contract](https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest).
+Do not rely on [window-focus cache refetch](https://tanstack.com/query/latest/docs/framework/react/guides/window-focus-refetching)
+to establish this workflow: query freshness and server snapshot freshness are
+different layers. A same-tab full return plus an explicit authoritative read
+eliminates both stale-client and stale-server special cases. The formal OAuth
+analysis linked above motivates keeping session integrity separate from business
+authorization; a successful browser return never joins accounts or grants a tier.

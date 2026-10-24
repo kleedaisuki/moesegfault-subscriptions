@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { ApiError, continuation, loginPath, mutate, request } from './api';
+import { ApiError, continuation, loginPath, portalPath, mutate, request } from './api';
 import { ActivationForm, AuthRecovery, authenticationStateAfterFailure, authRecoveryCode, errorMessage, periodDate } from './App';
 import { messages, persist, preference, resolveLocale } from './i18n';
 
@@ -35,6 +35,24 @@ describe('same-origin billing client', () => {
 });
 
 describe('integration boundaries', () => {
+  it('retains handoff through local catalog navigation without reflecting credentials', () => {
+    const destination = 'https://adash-staging.moesegfault.dev/billing/return';
+    const input = `?app=agents&plan=agents-go&return_to=${encodeURIComponent(destination)}&code=private&state=private&access_token=private`;
+    for (const path of ['/', '/products'] as const) {
+      const url = new URL(portalPath(path, input), 'https://subscribe-staging.moesegfault.dev');
+      expect(url.origin).toBe('https://subscribe-staging.moesegfault.dev');
+      expect(url.pathname).toBe(path);
+      expect(Object.fromEntries(url.searchParams)).toEqual({ app: 'agents', plan: 'agents-go', return_to: destination });
+    }
+  });
+
+  it('never turns an untrusted return hint into external navigation authority', () => {
+    const path = portalPath('/products', '?return_to=https%3A%2F%2Fevil.invalid&next=%2F%2Fevil.invalid');
+    expect(new URL(path, 'https://subscribe-staging.moesegfault.dev').origin).toBe('https://subscribe-staging.moesegfault.dev');
+    expect(continuation({ authenticated: false })).toBeUndefined();
+    expect(portalPath('/', '')).toBe('/');
+  });
+
   it('keeps return navigation on a fresh or reloaded portal without local activation success', () => {
     const session = { authenticated: true, returnTo: 'https://account.example/subscriptions' };
     const props = { session, locale: 'en' as const, onActivated: async () => {}, onAuthenticationFailure: () => {} };

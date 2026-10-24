@@ -87,14 +87,25 @@ export function mutate<T>(path: string, method: string, csrfToken: string, body?
   });
 }
 
-/** Forward integration hints to the BFF; only it validates the continuation. */
-export function loginPath(search: string, pathname = "/"): string {
-  const input = new URLSearchParams(search);
+function integrationParams(input: URLSearchParams): URLSearchParams {
   const output = new URLSearchParams();
   for (const key of ['app', 'plan', 'return_to']) {
     const value = input.get(key);
     if (value) output.set(key, value);
   }
+  return output;
+}
+
+/** Retain handoff context only in local navigation; the BFF still validates it. */
+export function portalPath(path: '/' | '/products', search: string): string {
+  const output = integrationParams(new URLSearchParams(search));
+  return `${path}${output.size ? `?${output}` : ''}`;
+}
+
+/** Forward integration hints to the BFF; only it validates the continuation. */
+export function loginPath(search: string, pathname = "/"): string {
+  const input = new URLSearchParams(search);
+  const output = integrationParams(input);
   if (/^\/amail\/authorize\/[A-Za-z0-9_-]{24,128}$/.test(pathname)) {
     output.set('path', pathname);
   }
