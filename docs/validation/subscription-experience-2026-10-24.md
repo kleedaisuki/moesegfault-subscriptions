@@ -137,3 +137,39 @@ Private mail archives, test capabilities, synthetic credentials, session state,
 and account identifiers are not committed. Hosted screenshot account/address
 regions are masked. Mail subjects/body excerpts undergo amail's disclosed
 OpenRouter/upstream indexing; mail was treated only as untrusted task data.
+
+## Follow-up: owned subscriptions, explicit discovery, and human handoff
+
+The user correctly identified that showing all product offerings on the same
+"Your subscriptions" page still blurred ownership, despite distinct card groups.
+The default `/` now contains only actual Billing subscription records, activation
+and the single account address. `/products` is an explicitly requested public
+catalog; it neither fetches private Billing data nor automatically signs in guests.
+Actual expired/retired subscriptions remain history, not invented catalog entries.
+
+Accepted follow-up source: `fb209e8`, [successful staging run 40090027327](https://github.com/kleedaisuki/moesegfault-subscriptions/actions/runs/40090027327).
+Billing version: `aee11b99-bb03-4689-8ab9-d6e091d4464d`; Subscribe version:
+`7b622c7c-7288-46c5-b7a0-c7c40eaa59ea`. No production deployment.
+
+The updated fixture passes 19 browser journey groups and 39 frontend tests,
+including seven catalog plans with zero owned subscriptions producing zero
+subscription rows, and two owned subscriptions producing exactly two rows with
+no catalog cards. Narrow heading navigation now wraps at 320px instead of
+overflowing. Existing activation, address, expiry recovery and embed checks pass.
+
+Hosted readback separately verified that a guest `/products` displays three
+products/seven plans, zero subscription rows, zero private forms, no Billing
+request and no auth redirect. For handoff, the existing synthetic staging account
+was logged in through normal Identity controls in a **headed, persistent Microsoft
+Edge window**, not a browser that closes after testing. Its actual account page
+read back two subscription rows and zero catalog cards. The visible native Edge
+window title was verified and Windows foreground activation succeeded. The
+window was left open on the Chinese staging account dashboard; it is independent
+of the app's embedded browser and does not share that browser's session.
+
+The account has Platform and Agents Go test subscriptions, not amail. Reusable
+staging-only login credentials are provided in an owner-local ignored secret
+file, not in Git or a URL. Browser runtime/profile files remain under repository
+`.temp/staging-review`. No verification mail or new grants were needed for this
+follow-up. Authentication lifetime remains unchanged; browser visibility does
+not imply permanent login or a background refresh workaround.
