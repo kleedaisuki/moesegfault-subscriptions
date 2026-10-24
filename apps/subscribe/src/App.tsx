@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ApiError, continuation, loginPath, mutate, request, type Billing, type BillingProfile, type Plan, type Session, type Subscription } from './api';
 import { messages, persist, preference, resolveLocale, type Locale } from './i18n';
+import { clearBillingDraft, keepBillingDraft, takeBillingDraft } from './billingDraft';
 import './styles.css';
 
 /** A profile never borrows an unverified email from OIDC claims. */
@@ -29,6 +30,24 @@ export function AuthRecovery({ search, locale, authenticated, embedded }: { sear
     {authenticated && <p>{t.previousSession}</p>}
     <a href={loginPath(search)} target={embedded ? '_top' : undefined}>{t.loginRetry}</a>
   </div>;
+}
+
+/** A non-sensitive, tab-local marker bounds SSO even if a callback returns as a guest. */
+export function claimAutomaticLogin(search: string, embedded: boolean): boolean {
+  if (embedded || new URLSearchParams(search).has('auth_error')) return false;
+  try {
+    if (sessionStorage.getItem('subscribe-sso-attempted')) return false;
+    sessionStorage.setItem('subscribe-sso-attempted', '1');
+    return true;
+  } catch { return false; }
+}
+
+export function suppressAutomaticLogin(): void {
+  try { sessionStorage.setItem('subscribe-sso-attempted', '1'); } catch { /* Explicit login remains available. */ }
+}
+
+export function resetAutomaticLogin(): void {
+  try { sessionStorage.removeItem('subscribe-sso-attempted'); } catch { /* No credentials are kept in browser storage. */ }
 }
 
 /** Localize actionable failure classes, not arbitrary server or vendor messages. */
@@ -61,19 +80,55 @@ function Notice({ error, success, locale }: { error?: unknown; success?: string;
   </div>;
 }
 
-/** Read-only account embed and main portal share the same authoritative subscription list. */
-function SubscriptionList({ subscriptions, plans, locale }: { subscriptions: Subscription[]; plans: Plan[]; locale: Locale }) {
+export function productName(id: string, locale: Locale): string {
+  if (id === 'amail') return 'amail';
+  if (id === 'agents') return 'Agents';
+  if (id === 'moesegfault-platform') return messages[locale].platform;
+  return id.replace(/[-_]+/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase());
+}
+
+export function groupPlans(plans: Plan[]): { id: string; plans: Plan[] }[] {
+  const products = new Map<string, Plan[]>();
+  for (const plan of plans) {
+    if (!plan.active) continue;
+    const group = products.get(plan.product_id) ?? [];
+    group.push(plan);
+    products.set(plan.product_id, group);
+  }
+  return Array.from(products, ([id, items]) => ({ id, plans: items }));
+}
+
+export function SubscriptionList({ subscriptions, plans, locale, embedded = false }: { subscriptions: Subscription[]; plans: Plan[]; locale: Locale; embedded?: boolean }) {
   const t = messages[locale];
-  if (!subscriptions.length) return <div className="empty-state"><span aria-hidden="true">◇</span><p>{t.noSubscriptions}</p></div>;
+  if (!subscriptions.length) return <div className="empty-state"><span className="empty-icon" aria-hidden="true">◇</span><h3>{t.noSubscriptions}</h3><a href={embedded ? "/" : "#activate"} target={embedded ? "_top" : undefined}>{t.activate} <span aria-hidden="true">↗</span></a></div>;
+  const catalog = new Map(plans.map(plan => [plan.id, plan]));
   return <div className="subscription-list">{subscriptions.map(subscription => {
-    const plan = plans.find(item => item.id === subscription.plan_id);
-    const status = subscription.status === 'active' && new Date(typeof subscription.current_period_end === 'number' ? subscription.current_period_end * 1000 : subscription.current_period_end).getTime() <= Date.now() ? 'expired' : subscription.status;
+    const plan = catalog.get(subscription.plan_id);
+    const end = typeof subscription.current_period_end === 'number' ? subscription.current_period_end * 1000 : /^\d+$/.test(subscription.current_period_end) ? Number(subscription.current_period_end) * 1000 : subscription.current_period_end;
+    const status = subscription.status === 'active' && new Date(end).getTime() <= Date.now() ? 'expired' : subscription.status;
     const label = ['active', 'expired', 'canceled', 'pending'].includes(status) ? t[status as 'active' | 'expired' | 'canceled' | 'pending'] : t.unknown;
     return <article key={subscription.id} className="subscription-row">
-      <div><p className="eyebrow">{subscription.product_id}</p><h3>{plan?.name[locale] || plan?.name.en || subscription.plan_id}</h3><p className="muted">{t.until} {periodDate(subscription.current_period_end, locale)}</p></div>
-      <span className={`status-pill ${status === 'active' ? 'status-active' : ''}`}>{label}</span>
+      <span className="product-icon" aria-hidden="true">{productName(subscription.product_id, locale).slice(0, 1)}</span>
+      <div className="subscription-copy"><h3>{productName(subscription.product_id, locale)}</h3><p>{plan?.name[locale] || plan?.name.en || t.unavailablePlan}</p></div>
+      <div className="subscription-period"><span className={"status-pill " + (status === 'active' ? 'status-active' : '')}>{label}</span><p className="muted">{t.until} {periodDate(subscription.current_period_end, locale)}</p></div>
     </article>;
   })}</div>;
+}
+
+export function ProductCatalog({ plans, locale, authenticated, requestedPlan }: { plans: Plan[]; locale: Locale; authenticated: boolean; requestedPlan?: string | null }) {
+  const t = messages[locale];
+  const products = groupPlans(plans);
+  return <section className="catalog" id="products" aria-labelledby="catalog-title">
+    <div className="section-heading"><h2 id="catalog-title">{t.catalog}</h2></div>
+    {!products.length && <p className="muted">{t.noPlans}</p>}
+    <div className="product-grid">{products.map(product => <article className="product-card" key={product.id}>
+      <div className="product-heading"><span className="product-icon" aria-hidden="true">{productName(product.id, locale).slice(0, 1)}</span><h3>{productName(product.id, locale)}</h3></div>
+      <div className="product-plans">{product.plans.map(plan => <details key={plan.id} className={"plan-option " + (requestedPlan === plan.id ? 'plan-requested' : '')} open={requestedPlan === plan.id || undefined}>
+        <summary><span className="plan-name">{plan.name[locale] || plan.name.en}{requestedPlan === plan.id && <span className="requested-dot" aria-label={t.selected} />}</span><span className="plan-duration">{plan.duration_days} {t.days}</span><span className="disclosure" aria-hidden="true">⌄</span></summary>
+        <div className="plan-details"><p className="muted">{plan.description[locale] || plan.description.en}</p><a href={authenticated ? '#activate' : loginPath(location.search)}>{t.useCode} <span aria-hidden="true">↗</span></a></div>
+      </details>)}</div>
+    </article>)}</div>
+  </section>;
 }
 
 /** Keep failed retries on the same idempotency key until code input changes.
@@ -103,21 +158,26 @@ export function ActivationForm({ session, locale, onActivated, onAuthenticationF
     } finally { setBusy(false); }
   }
   return <section className="panel activation-panel" id="activate" aria-labelledby="activate-title">
-    <div className="section-heading"><span className="section-number" aria-hidden="true">02</span><h2 id="activate-title">{t.activate}</h2></div>
+    <div className="section-heading"><h2 id="activate-title">{t.activationCode}</h2></div>
     <form onSubmit={submit}>
-      <label htmlFor="activation-code">{t.activationCode}</label>
-      <div className="code-controls"><input id="activation-code" name="activation-code" value={code} onChange={event => { setCode(event.target.value); setSuccess(false); }} placeholder={t.codePlaceholder} required maxLength={256} autoComplete="off" autoCapitalize="none" spellCheck={false} aria-describedby="code-hint" disabled={busy} /><button className="moe-button" disabled={busy || !code.trim()}>{busy ? t.activating : t.redeem}</button></div>
-      <p id="code-hint" className="muted hint">{t.codeHint}</p>
+      <label className="sr-only" htmlFor="activation-code">{t.activationCode}</label>
+      <div className="code-controls"><input id="activation-code" name="activation-code" value={code} onChange={event => { setCode(event.target.value); setSuccess(false); }} placeholder={t.codePlaceholder} required maxLength={256} autoComplete="off" autoCapitalize="none" spellCheck={false} disabled={busy} /><button className="moe-button" disabled={busy || !code.trim()}>{busy ? t.activating : t.redeem}</button></div>
     </form>
     <Notice error={error} success={success ? t.activated : undefined} locale={locale} />
-    {continuation(session) && <a className="moe-button" href={continuation(session)}>{t.continue} <span aria-hidden="true">↗</span></a>}
+    {continuation(session) && <a className="return-link" href={continuation(session)}>{t.continue} <span aria-hidden="true">↗</span></a>}
   </section>;
 }
 
-/** Only explicitly entered billing details are sent to the service. */
-function ProfileForm({ initial, session, locale, onAuthenticationFailure }: { initial: BillingProfile; session: Session; locale: Locale; onAuthenticationFailure: (error: unknown) => void }) {
+function normalizeProfile(profile: BillingProfile): BillingProfile {
+  return Object.fromEntries(Object.keys(emptyProfile).map(key => [key, profile[key as keyof BillingProfile] ?? ''])) as unknown as BillingProfile;
+}
+
+export function ProfileForm({ initial, session, locale, onAuthenticationFailure }: { initial: BillingProfile; session: Session; locale: Locale; onAuthenticationFailure: (error: unknown) => void }) {
   const t = messages[locale];
-  const [profile, setProfile] = useState<BillingProfile>(() => Object.fromEntries(Object.keys(emptyProfile).map(key => [key, initial[key as keyof BillingProfile] ?? ''])) as unknown as BillingProfile);
+  const [draft] = useState(() => takeBillingDraft(session.user?.sub));
+  const [stored, setStored] = useState(() => normalizeProfile(initial));
+  const [profile, setProfile] = useState(draft ?? stored);
+  const [editing, setEditing] = useState(Boolean(draft));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
   const [saved, setSaved] = useState(false);
@@ -125,25 +185,30 @@ function ProfileForm({ initial, session, locale, onAuthenticationFailure }: { in
     event.preventDefault();
     if (busy) return;
     setBusy(true); setError(undefined); setSaved(false);
-    try { await mutate('/api/profile', 'PUT', session.csrfToken ?? '', profile); setSaved(true); }
-    catch (failure) { setError(failure); onAuthenticationFailure(failure); }
-    finally { setBusy(false); }
+    try {
+      await mutate('/api/profile', 'PUT', session.csrfToken ?? '', profile);
+      clearBillingDraft(); setStored(profile); setSaved(true); setEditing(false);
+    } catch (failure) {
+      if (failure instanceof ApiError && failure.status === 401) keepBillingDraft(session.user?.sub, profile);
+      setError(failure); onAuthenticationFailure(failure);
+    } finally { setBusy(false); }
   }
-  const autocomplete: Partial<Record<keyof BillingProfile, string>> = { display_name: 'organization', email: 'email', country: 'country', address_line1: 'address-line1', address_line2: 'address-line2', city: 'address-level2', postal_code: 'postal-code' };
-  return <section className="panel" id="profile" aria-labelledby="profile-title">
-    <div className="section-heading"><span className="section-number" aria-hidden="true">03</span><h2 id="profile-title">{t.profile}</h2></div>
-    <p className="muted">{t.profileHint}</p>
-    <form onSubmit={submit} className="profile-form">
+  useEffect(() => { if (!editing) { const next = normalizeProfile(initial); setStored(next); setProfile(next); } }, [initial]);
+  const autocomplete: Partial<Record<keyof BillingProfile, string>> = { display_name: 'name', email: 'email', country: 'country', address_line1: 'address-line1', address_line2: 'address-line2', city: 'address-level2', postal_code: 'postal-code' };
+  const address = [stored.address_line1, stored.address_line2, [stored.city, stored.postal_code].filter(Boolean).join(' '), stored.country].filter(Boolean);
+  return <section className="panel billing-panel" id="profile" aria-labelledby="profile-title">
+    <div className="section-heading"><h2 id="profile-title">{t.profile}</h2>{!editing && <button type="button" className="text-button" onClick={() => { setProfile(stored); setEditing(true); setSaved(false); }}>{address.length || stored.display_name || stored.email ? t.edit : t.add}</button>}</div>
+    {!editing ? <div className="address-summary"><address>{stored.display_name && <strong>{stored.display_name}</strong>}{address.map((line, index) => <span key={index}>{line}</span>)}{!address.length && <span className="muted">{t.noAddress}</span>}{stored.email && <span>{stored.email}</span>}{stored.tax_id && <span>{t.tax_id}: {stored.tax_id}</span>}</address></div> : <form onSubmit={submit} className="profile-form">
       <fieldset disabled={busy}><legend className="sr-only">{t.profile}</legend><div className="form-grid">
-        {(Object.keys(emptyProfile) as (keyof BillingProfile)[]).map(key => <div className={`field ${key.startsWith('address') ? 'field-wide' : ''}`} key={key}>
-          <label htmlFor={`profile-${key}`}>{t[key]}</label>
-          <input id={`profile-${key}`} name={key} value={profile[key] ?? ''} onChange={event => { setProfile({ ...profile, [key]: key === 'country' ? event.target.value.toUpperCase() : event.target.value }); setSaved(false); }} type={key === 'email' ? 'email' : 'text'} autoComplete={autocomplete[key] ?? 'off'} maxLength={key === 'country' ? 2 : key === 'email' ? 254 : 256} pattern={key === 'country' ? '[A-Z]{2}' : undefined} aria-describedby={key === 'country' ? 'country-hint' : undefined} />
+        {(Object.keys(emptyProfile) as (keyof BillingProfile)[]).map(key => <div className={"field " + (key.startsWith('address') || key === 'display_name' || key === 'email' ? 'field-wide' : '')} key={key}>
+          <label htmlFor={"profile-" + key}>{t[key]}</label>
+          <input id={"profile-" + key} name={key} value={profile[key] ?? ''} onChange={event => setProfile({ ...profile, [key]: key === 'country' ? event.target.value.toUpperCase() : event.target.value })} type={key === 'email' ? 'email' : 'text'} autoComplete={autocomplete[key] ?? 'off'} maxLength={key === 'country' ? 2 : key === 'email' ? 254 : 256} pattern={key === 'country' ? '[A-Z]{2}' : undefined} aria-describedby={key === 'country' ? 'country-hint' : undefined} />
           {key === 'country' && <small id="country-hint" className="muted">{t.countryHint}</small>}
         </div>)}
       </div></fieldset>
-      <div className="form-footer"><button className="moe-button" data-variant="secondary" disabled={busy}>{busy ? t.saving : t.save}</button><small className="muted">{t.privacy}</small></div>
-    </form>
-    <Notice error={error} success={saved ? t.saved : undefined} locale={locale} />
+      <div className="form-footer"><button className="moe-button" disabled={busy}>{busy ? t.saving : t.save}</button><button type="button" className="text-button" disabled={busy} onClick={() => { clearBillingDraft(); setEditing(false); setError(undefined); }}>{t.cancel}</button></div>
+    </form>}
+    <Notice error={error} success={saved ? t.saved : draft && editing ? t.draftRestored : undefined} locale={locale} />
   </section>;
 }
 
@@ -160,6 +225,7 @@ export default function App() {
   const [loadError, setLoadError] = useState<unknown>();
   const [logoutBusy, setLogoutBusy] = useState(false);
   const [actionError, setActionError] = useState<unknown>();
+  const initialLoginChecked = useRef(false);
   const t = messages[locale];
   useEffect(() => { document.documentElement.lang = locale; document.title = `${t.subscriptions} · moeSegFault`; persist('subscribe-locale', locale); }, [locale, t]);
   useEffect(() => { document.documentElement.dataset.moeTheme = theme; persist('moe-theme', theme); }, [theme]);
@@ -177,46 +243,48 @@ export default function App() {
   async function load() {
     setLoading(true); setLoadError(undefined);
     try {
-      const [nextSession, catalog] = await Promise.all([request<Session>(`/api/session${location.search}`), request<{ plans: Plan[] }>('/api/catalog')]);
-      setSession(nextSession); setPlans(catalog.plans);
-      if (nextSession.authenticated) setBilling(await request<Billing>('/api/billing'));
-      else setBilling(undefined);
+      const account = request<Session>(`/api/session${location.search}`).then(async nextSession => ({ session: nextSession, billing: nextSession.authenticated ? await request<Billing>('/api/billing') : undefined }));
+      const [next, catalog] = await Promise.all([account, request<{ plans: Plan[] }>('/api/catalog')]);
+      setSession(next.session); setBilling(next.billing); setPlans(catalog.plans);
     } catch (error) { setLoadError(error); onAuthenticationFailure(error); }
     finally { setLoading(false); }
   }
   useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    if (loading || !session || initialLoginChecked.current) return;
+    initialLoginChecked.current = true;
+    if (session.authenticated) resetAutomaticLogin();
+    else if (!loadError && claimAutomaticLogin(location.search, embedded)) location.assign(loginPath(location.search));
+  }, [loading, session, loadError, embedded]);
   async function logout() {
     setLogoutBusy(true); setActionError(undefined);
-    try { await mutate('/auth/logout', 'POST', session?.csrfToken ?? ''); setSession({ authenticated: false }); setBilling(undefined); }
+    try { await mutate('/auth/logout', 'POST', session?.csrfToken ?? ''); suppressAutomaticLogin(); setSession({ authenticated: false }); setBilling(undefined); }
     catch (error) { setActionError(error); onAuthenticationFailure(error); }
     finally { setLogoutBusy(false); }
   }
   const requestedPlan = query.get('plan');
-  const viewerName = session?.user?.name || session?.user?.sub;
-  const content = <>
-    <AuthRecovery search={location.search} locale={locale} authenticated={session?.authenticated ?? false} embedded={embedded} />
-    <Notice error={actionError} locale={locale} />
-    {loading && <div className="panel loading" role="status"><span className="loading-dot" aria-hidden="true" />{t.loading}</div>}
-    {!loading && loadError && <div className="panel"><Notice error={loadError} locale={locale} /><button className="moe-button" onClick={() => void load()}>{t.retry}</button></div>}
-    {!loading && session && !session.authenticated && <section className="panel login-panel"><div className="login-emblem" aria-hidden="true">◇</div><h2>{t.loginTitle}</h2><p className="muted">{t.loginBody}</p><a className="moe-button" href={loginPath(location.search)} target={embedded ? '_top' : undefined}>{t.signIn} <span aria-hidden="true">↗</span></a></section>}
-    {!loading && session?.authenticated && <>
-      <section className="panel" id="subscriptions" aria-labelledby="subscriptions-title"><div className="section-heading"><span className="section-number" aria-hidden="true">01</span><h2 id="subscriptions-title">{t.subscriptions}</h2><button className="text-button refresh-button" onClick={() => void refreshBilling()}>{t.refresh}</button></div>
-        <p className="viewer muted">{t.signedInAs}: <strong>{viewerName}</strong></p>
-        {billing && <SubscriptionList subscriptions={billing.subscriptions} plans={plans} locale={locale} />}
-        {embedded && <div className="embed-actions"><a className="moe-button" href="/" target="_top">{t.manage} <span aria-hidden="true">↗</span></a><a href="/account?reconnect=1" target="_top">{t.reconnect}</a></div>}
-      </section>
-      {!embedded && <ActivationForm session={session} locale={locale} onActivated={refreshBilling} onAuthenticationFailure={onAuthenticationFailure} />}
-      {!embedded && billing && <ProfileForm initial={billing.account.profile} session={session} locale={locale} onAuthenticationFailure={onAuthenticationFailure} />}
-    </>}
-  </>;
-  if (embedded) return <main className="embed-shell"><h1 className="sr-only">{t.accountTitle}</h1>{content}</main>;
+  const viewerName = session?.user?.name || billing?.account.profile.display_name;
+  const subscriptions = <section className="panel subscriptions-panel" id="subscriptions" aria-labelledby="subscriptions-title">
+    <div className="section-heading"><h2 id="subscriptions-title" className={embedded ? '' : 'sr-only'}>{t.subscriptions}</h2><button className="text-button refresh-button" onClick={() => void refreshBilling()}>{t.refresh}</button></div>
+    {embedded && <p className="viewer muted">{t.signedInAs}: <strong>{session?.user?.name || session?.user?.sub}</strong></p>}
+    {billing && <SubscriptionList subscriptions={billing.subscriptions} plans={plans} locale={locale} embedded={embedded} />}
+    {embedded && <div className="embed-actions"><a className="moe-button" href="/" target="_top">{t.manage} <span aria-hidden="true">↗</span></a><a href="/auth/login?path=%2Faccount&prompt=select_account" target="_top">{t.reconnect}</a></div>}
+  </section>;
+  const feedback = <><AuthRecovery search={location.search} locale={locale} authenticated={session?.authenticated ?? false} embedded={embedded} /><Notice error={actionError} locale={locale} />{loading && <div className="panel loading" role="status"><span className="loading-dot" aria-hidden="true" />{t.loading}</div>}{!loading && loadError && <div className="panel"><Notice error={loadError} locale={locale} /><button className="moe-button" onClick={() => void load()}>{t.retry}</button></div>}</>;
+  const login = !loading && session && !session.authenticated && <section className="panel login-panel"><span className="login-emblem" aria-hidden="true">◇</span><h2>{t.loginTitle}</h2><a className="moe-button" href={loginPath(location.search)} target={embedded ? '_top' : undefined}>{t.signIn} <span aria-hidden="true">↗</span></a></section>;
+  if (embedded) return <main className="embed-shell"><h1 className="sr-only">{t.accountTitle}</h1>{feedback}{login}{!loading && session?.authenticated && subscriptions}</main>;
   return <div className="app-shell">
     <a className="skip-link" href="#main">{t.subscriptions}</a>
     <header className="site-header"><a className="brand" href="/" aria-label="moeSegFault Subscribe"><span className="brand-mark" aria-hidden="true"><img src="/style/v0.1.2/icons/brand.svg" alt="" /></span><span>moeSegFault<span className="brand-product">Subscribe</span></span></a>
       <div className="header-controls"><label className="sr-only" htmlFor="language">{t.language}</label><select id="language" value={locale} onChange={event => setLocale(event.target.value as Locale)}><option value="zh-CN">简体中文</option><option value="ja">日本語</option><option value="en">English</option></select><label className="sr-only" htmlFor="theme">{t.theme}</label><select id="theme" value={theme} onChange={event => setTheme(event.target.value)}><option value="auto">◐ {t.auto}</option><option value="light">☀ {t.light}</option><option value="dark">☾ {t.dark}</option></select>{session?.authenticated && <button className="text-button" disabled={logoutBusy} onClick={() => void logout()}>{t.signOut}</button>}</div>
     </header>
-    <main id="main"><section className="hero"><div className="hero-copy"><p className="eyebrow">moeSegFault / Subscribe</p><h1>{t.title}</h1><p className="hero-description">{t.subtitle}</p><ol className="steps" aria-label={t.steps}><li><span>1</span>{t.step1}</li><li><span>2</span>{t.step2}</li><li><span>3</span>{t.step3}</li></ol></div><div className="hero-art" aria-hidden="true"><div className="orb orb-one" /><div className="orb orb-two" /><span className="art-star star-one">✦</span><span className="art-star star-two">✧</span><div className="membership-card"><span>moeSegFault</span><img className="card-symbol" src="/style/v0.1.2/icons/brand.svg" alt="" /><div className="card-lines"><i /><i /></div><small>MEMBERSHIP</small></div></div></section>
-      <div className="content-grid"><div className="main-column">{content}</div><aside className="catalog" aria-labelledby="catalog-title"><div className="catalog-heading"><p className="eyebrow">PLANS</p><h2 id="catalog-title">{t.catalog}</h2></div>{!loading && !plans.filter(plan => plan.active).length && <p className="muted">{t.noPlans}</p>}{plans.filter(plan => plan.active).map(plan => <article key={plan.id} className={`plan-card ${plan.id === requestedPlan ? 'plan-requested' : ''}`}><p className="eyebrow">{plan.product_id}</p><h3>{plan.name[locale] || plan.name.en}</h3><p className="muted">{plan.description[locale] || plan.description.en}</p><div className="plan-duration"><strong>{plan.duration_days}</strong> {t.days}</div>{plan.id === requestedPlan && <span className="status-pill">{t.selected}</span>}<a className="plan-link" href={session?.authenticated ? '#activate' : loginPath(location.search)}>{session?.authenticated ? t.activate : t.signIn}<span aria-hidden="true">↗</span></a></article>)}</aside></div>
+    <main id="main"><div className="page-heading"><div><h1>{t.accountTitle}</h1>{viewerName && <p className="account-name">{viewerName}</p>}</div><a className="browse-link" href="#products">{t.catalog} <span aria-hidden="true">↓</span></a></div>
+      {feedback}
+      {!loading && <div className={"dashboard " + (session?.authenticated ? "" : "guest-dashboard")}>{login}{session?.authenticated && subscriptions}
+        {session?.authenticated && <ActivationForm session={session} locale={locale} onActivated={refreshBilling} onAuthenticationFailure={onAuthenticationFailure} />}
+        <ProductCatalog plans={plans} locale={locale} authenticated={session?.authenticated ?? false} requestedPlan={requestedPlan} />
+        {session?.authenticated && billing && <ProfileForm key={billing.account.id} initial={billing.account.profile} session={session} locale={locale} onAuthenticationFailure={onAuthenticationFailure} />}
+      </div>}
     </main>
     <footer className="site-footer"><span>© {new Date().getFullYear()} moeSegFault</span><a href="mailto:subscribe@moesegfault.dev">{t.support} <span aria-hidden="true">↗</span></a></footer>
   </div>;

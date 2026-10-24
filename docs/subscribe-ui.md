@@ -49,8 +49,8 @@ failures do not block any workflow.
 
 Forms use persistent labels, native validity checks, disabled controls while
 submitting, visible keyboard focus, and `role=alert`/`role=status` feedback.
-Atmosphere comes from warm surfaces and a CSS-only membership illustration, not
-unhelpful product claims. Narrow screens omit the illustration. Reduced-motion
+Visual hierarchy comes from warm surfaces, grouped products, and compact account actions, not
+marketing illustration or unhelpful product claims. Reduced-motion
 preferences suppress motion.
 
 ## Verification and references
@@ -105,3 +105,75 @@ without a success message and removal of the link after session clearing. The
 focused suite passed twenty tests, TypeScript passed, and the production build
 completed in approximately 100 ms. No backend, authentication, scope or provider
 lifetime changed.
+
+## Account dashboard and product hierarchy (2026-10-24)
+
+The domain cardinality is reflected directly in layout, not instructional copy:
+
+- One account owns one billing address/contact profile. It is a summary with an
+  explicit Add/Edit action, never duplicated per product or subscription.
+- The account's subscriptions are the primary content. Each row presents product,
+  plan, expiry, and status. Internal subject/product/plan identifiers are not
+  ordinary customer-facing labels; the embedded Account identity remains explicit.
+- The catalog groups active plans under products. All tier names and durations
+  remain visible; native `details` exposes the deployment-owned complete plan
+  description and activation link. Descriptions retain pricing and settlement
+  distinctions, without duplicating them across the default view.
+- Activation is a compact action alongside subscriptions, not a numbered stage in
+  a fictitious linear onboarding process. Catalog selection is context only;
+  codes remain authoritative. The accepted continuation remains durable navigation.
+- DOM order is subscriptions, activation, catalog, billing address. CSS grid places
+  account actions alongside product content on desktop; mobile uses the same DOM
+  order, preserving keyboard order without visually reordered interactive content.
+
+Known product names (Platform, amail, Agents) are display-only mappings. Grouping
+always uses stable `product_id`, never translated text; future identifiers receive
+readable fallback names. Adding deployment-owned localized product metadata remains
+an additive future contract improvement, not a prerequisite or a schema migration.
+
+### Session entry and form recovery
+
+Top-level initial guest loads make one automatic `/auth/login` navigation, allowing
+Identity's existing SSO cookie to resume authentication even from plain service
+links without query hints. An opaque tab-local sessionStorage marker bounds the
+attempt. Auth callback errors, blocked storage, embedded Account views, and explicit
+logout suppress automatic navigation; manual login is always available. A successful
+initial authenticated load clears the marker. The initial-entry effect does not run
+again when a later mutation gets 401, so expiry cannot navigate away mid-edit.
+Hosted amail consent uses the same bounded entry behavior but still requires explicit
+human approval; sign-in never approves consent. Switching account explicitly requests
+`prompt=select_account` rather than accidentally reusing the existing BFF session.
+
+A billing profile save rejected with 401 preserves only that invoice draft in
+sessionStorage for ten minutes, bound to the authenticated session's opaque subject.
+The next same-subject authenticated load consumes the draft and opens it for review;
+wrong-subject, expired, invalid or corrupted drafts are discarded. Save/cancel clears
+any draft. This limited browser-local PII retention is deliberate recovery behavior;
+activation codes, passwords, OTPs and OAuth credentials are never persisted. Normal
+editing does not write billing details to browser storage. A refreshed profile updates
+the address summary unless the user is actively editing.
+
+### Performance and verification
+
+Billing starts immediately after the session resolves, independently of catalog
+latency. This removes an avoidable catalog-to-billing waterfall without issuing an
+unauthenticated billing request or moving tokens into the browser. Subscription plan
+lookups use a per-render map, and catalog grouping is linear in the plan count.
+
+Focused verification: TypeScript and production build passed, 36 Vitest cases passed
+(including ten new hierarchy/SSO/draft cases). Grouping is checked under reordered
+catalog inputs; browser validation covers responsive layout, editing, activation,
+account embeds, and bounded login. Build output at this milestone: JavaScript
+227.20 kB / 72.50 kB gzip, application CSS 10.63 kB / 2.77 kB gzip. This includes
+existing hosted consent code; no new runtime dependency, image or webfont was added.
+
+Design rationale and external references:
+
+- [W3C grouping controls](https://www.w3.org/WAI/tutorials/forms/grouping/): visual
+  relationships must also be represented by semantic form grouping and labels.
+- [Nielsen Norman Group progressive disclosure](https://www.nngroup.com/articles/progressive-disclosure/):
+  less-frequent form editing and long terms should not drown out the dominant task.
+- [Pirolli and Card, CHI 1995](https://chi1995.acm.org/proceedings/papers/ppp_bdy.htm):
+  information-foraging models frame interface structure as a cost/value trade-off.
+  Here the practical hypothesis is that grouping tiers by product reduces scanning
+  cost; no unmeasured user-study or conversion improvement is claimed.

@@ -3,13 +3,13 @@ export type Locale = 'zh-CN' | 'ja' | 'en';
 
 const en = {
   title: 'Manage your subscriptions.', subtitle: 'Manage your subscriptions in one place. Activate a plan with a code, then return to your app.',
-  subscriptions: 'Subscriptions', activate: 'Activate a plan', profile: 'Billing profile', signIn: 'Sign in', signOut: 'Sign out',
+  subscriptions: 'Subscriptions', activate: 'Activate a plan', profile: 'Billing address', signIn: 'Sign in', signOut: 'Sign out',
   loginTitle: 'One account. Your subscriptions.', loginBody: 'Sign in with moeSegFault to see your plans and redeem an activation code.',
   loginFailed: 'Sign-in wasn’t completed. Please try again.', loginDenied: 'Sign-in was canceled. Sign in again to continue.', loginRetry: 'Try signing in again', previousSession: 'The subscriptions shown still belong to your previously signed-in account.',
   language: 'Language', theme: 'Appearance', light: 'Light', dark: 'Dark', auto: 'System',
   loading: 'Loading your subscriptions…', loadError: 'We couldn’t load your subscriptions. Please try again.', retry: 'Try again',
-  catalog: 'Available plans', days: 'days', selected: 'Requested plan', select: 'Choose plan',
-  noPlans: 'No plans are available yet.', noSubscriptions: 'No subscriptions yet. Have a code? Activate your first plan below.',
+  catalog: 'Products', days: 'days', selected: 'Requested plan', select: 'Choose plan',
+  noPlans: 'No plans are available yet.', noSubscriptions: 'No subscriptions yet',
   active: 'Active', expired: 'Expired', canceled: 'Canceled', pending: 'Pending', unknown: 'Not active', until: 'Valid until',
   activationCode: 'Activation code', codeHint: 'Your code determines the plan. Each code can be redeemed once.', codePlaceholder: 'Enter your activation code',
   redeem: 'Activate', activating: 'Activating…', activated: 'Your plan is active.', continue: 'Return to app', manage: 'Manage subscriptions',
@@ -25,6 +25,8 @@ const en = {
   reference: 'Support reference', refresh: 'Refresh', signedInAs: 'Subscription service account', privacy: 'Your billing profile is separate from your sign-in account.',
   steps: 'How it works', step1: 'Sign in', step2: 'Enter your code', step3: 'Return to your app',
   accountTitle: 'Your subscriptions', accountHint: 'Plans activated with your subscription service account.', reconnect: 'Switch account',
+  draftRestored: 'Your unsaved billing address has been restored. Review it and save.',
+  platform: 'moeSegFault Platform', unavailablePlan: 'Plan unavailable', edit: 'Edit', add: 'Add', cancel: 'Cancel', noAddress: 'No billing address', useCode: 'Use an activation code',
   allPlans: 'All plans', required: 'Required', invalidProfile: 'Please check your billing details.',
 };
 
@@ -32,13 +34,13 @@ type Messages = typeof en;
 
 const zh: Messages = {
   title: '管理你的订阅。', subtitle: '在这里管理订阅，使用激活码开启套餐，再回到你的应用。',
-  subscriptions: '我的订阅', activate: '激活套餐', profile: '账单资料', signIn: '登录', signOut: '退出登录',
+  subscriptions: '我的订阅', activate: '激活套餐', profile: '账单地址', signIn: '登录', signOut: '退出登录',
   loginTitle: '一个账号，管理你的订阅。', loginBody: '使用 moeSegFault 账号登录，查看套餐或兑换激活码。',
   loginFailed: '登录未完成，请重试。', loginDenied: '登录授权已取消，请重新登录后继续。', loginRetry: '重新登录', previousSession: '当前仍显示之前登录账号的订阅。',
   language: '语言', theme: '外观', light: '浅色', dark: '深色', auto: '跟随系统',
   loading: '正在加载订阅…', loadError: '暂时无法加载订阅，请重试。', retry: '重试',
-  catalog: '可用套餐', days: '天', selected: '请求的套餐', select: '选择套餐',
-  noPlans: '暂时没有可用套餐。', noSubscriptions: '你还没有订阅。有激活码？在下方开启第一个套餐。',
+  catalog: '产品', days: '天', selected: '请求的套餐', select: '选择套餐',
+  noPlans: '暂时没有可用套餐。', noSubscriptions: '还没有订阅',
   active: '生效中', expired: '已到期', canceled: '已取消', pending: '待生效', unknown: '未生效', until: '有效期至',
   activationCode: '激活码', codeHint: '激活码决定实际开通的套餐。每个激活码仅可兑换一次。', codePlaceholder: '输入你的激活码',
   redeem: '激活', activating: '正在激活…', activated: '套餐已生效。', continue: '返回应用', manage: '管理订阅',
@@ -54,18 +56,20 @@ const zh: Messages = {
   reference: '客服参考编号', refresh: '刷新', signedInAs: '订阅服务账号', privacy: '账单资料与登录账号资料分别管理。',
   steps: '开通步骤', step1: '登录账号', step2: '输入激活码', step3: '返回应用',
   accountTitle: '我的订阅', accountHint: '以下套餐属于当前订阅服务账号。', reconnect: '切换账号',
+  draftRestored: '已恢复未保存的账单地址，请检查后保存。',
+  platform: 'moeSegFault 平台', unavailablePlan: '套餐已下架', edit: '编辑', add: '添加', cancel: '取消', noAddress: '尚未添加账单地址', useCode: '使用激活码',
   allPlans: '全部套餐', required: '必填', invalidProfile: '请检查账单资料。',
 };
 
 const ja: Messages = {
   title: 'サブスクリプションの管理。', subtitle: 'サブスクリプションをひとつの場所で管理。コードでプランを有効にして、アプリに戻りましょう。',
-  subscriptions: 'サブスクリプション', activate: 'プランを有効にする', profile: '請求先情報', signIn: 'ログイン', signOut: 'ログアウト',
+  subscriptions: 'サブスクリプション', activate: 'プランを有効にする', profile: '請求先住所', signIn: 'ログイン', signOut: 'ログアウト',
   loginTitle: 'ひとつのアカウントで管理。', loginBody: 'moeSegFault にログインして、プランの確認やコードの引き換えを行います。',
   loginFailed: 'ログインを完了できませんでした。もう一度お試しください。', loginDenied: 'ログインがキャンセルされました。続行するには再度ログインしてください。', loginRetry: 'ログインを再試行', previousSession: '表示中のサブスクリプションは、以前ログインしたアカウントのものです。',
   language: '言語', theme: '表示', light: 'ライト', dark: 'ダーク', auto: 'システム',
   loading: 'サブスクリプションを読み込み中…', loadError: '読み込めませんでした。もう一度お試しください。', retry: '再試行',
-  catalog: '利用可能なプラン', days: '日', selected: 'リクエストされたプラン', select: 'プランを選択',
-  noPlans: '現在利用できるプランはありません。', noSubscriptions: 'まだサブスクリプションはありません。コードをお持ちなら、下で有効にできます。',
+  catalog: '製品', days: '日', selected: 'リクエストされたプラン', select: 'プランを選択',
+  noPlans: '現在利用できるプランはありません。', noSubscriptions: 'サブスクリプションはまだありません',
   active: '有効', expired: '期限切れ', canceled: 'キャンセル済み', pending: '開始待ち', unknown: '無効', until: '有効期限',
   activationCode: 'アクティベーションコード', codeHint: 'コードによって有効になるプランが決まります。各コードは一度のみ利用できます。', codePlaceholder: 'コードを入力',
   redeem: '有効にする', activating: '有効化中…', activated: 'プランが有効になりました。', continue: 'アプリに戻る', manage: 'サブスクリプションを管理',
@@ -81,6 +85,8 @@ const ja: Messages = {
   reference: 'お問い合わせ番号', refresh: '更新', signedInAs: 'サブスクリプションサービスのアカウント', privacy: '請求先情報はログインアカウントの情報とは別に管理されます。',
   steps: '利用開始まで', step1: 'ログイン', step2: 'コードを入力', step3: 'アプリに戻る',
   accountTitle: 'サブスクリプション', accountHint: '現在のサブスクリプションサービスのアカウントに紐づくプランです。', reconnect: 'アカウントを切り替える',
+  draftRestored: '未保存の請求先住所を復元しました。確認して保存してください。',
+  platform: 'moeSegFault プラットフォーム', unavailablePlan: 'プランは利用できません', edit: '編集', add: '追加', cancel: 'キャンセル', noAddress: '請求先住所は未登録です', useCode: 'コードを利用する',
   allPlans: 'すべてのプラン', required: '必須', invalidProfile: '請求先情報をご確認ください。',
 };
 
