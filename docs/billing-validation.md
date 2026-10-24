@@ -68,3 +68,53 @@ used for the `replayed` response and access from the real authenticated session.
 
 The SQL tests are suitable for the cheap CI validation stage; they should not
 trigger an additional build job or independent heavy tool installation.
+
+## Account reads and profile-save round trips (2026-10-24)
+
+The portal's dominant returning-user workload previously issued an attempted
+account INSERT before every lookup, then fetched subscriptions and awaited two
+separate trace-persistence requests. Account ownership already matches the product
+hierarchy: one profile/address per principal, many product subscriptions per
+account, and multiple catalog plans per product. No cardinality migration is needed.
+
+`repository::ensure_account` now reads first. Existing principals require one
+read and no account write or random account-ID generation. First use inserts with
+`RETURNING`; a losing concurrent INSERT reads the winning row without modifying
+its profile or timestamps. The unique `(issuer, subject)` constraint remains the
+arbiter. Profile replacement uses `UPDATE ... RETURNING`, so its response contains
+the exact write's account rather than a later concurrent writer's profile.
+
+Trace insertion and indexed, 128-row-bounded expiry cleanup use one D1 batch. Trace
+schema, privacy policy and retention are unchanged. Trace failure still cannot
+invalidate a committed action. No asynchronous token/profile cache was introduced.
+
+| Steady-state Billing route | Prior D1 requests | Current D1 requests |
+| --- | ---: | ---: |
+| GET `/v1/me` (existing account) | 5 | 3 |
+| PUT `/v1/me/profile` (existing account) | 6 | 3 |
+
+Counts include trace persistence and exclude a cold Identity key fetch. They are
+structural transport counts, not a claim of measured end-to-end speedup. The trace
+batch still executes two SQL statements in one request. First-account creation
+uses two account requests; a simultaneous losing creation uses three. This rare
+path preserves existing users rather than overwriting their data to save a lookup.
+
+`tests/test_billing_account_sql.py` extracts actual Rust SQL and checks returned
+account columns, creation conflicts, read-only repeated lookups, full address
+replacement/clearing, isolation from other principals, and a shared account
+profile across two product subscriptions. Together with the original grant suite,
+**22 SQLite tests passed** on Python 3.14.6 in 0.276 seconds. These checks cover SQL
+semantics; staging must additionally save/reload the profile through the deployed
+BFF and D1 binding.
+
+Sources informing the bounded implementation:
+
+- [D1 FAQ](https://developers.cloudflare.com/d1/reference/faq/) recommends reducing
+  request count, not only individual query execution time.
+- [D1 batches](https://developers.cloudflare.com/d1/worker-api/d1-database/)
+  execute prepared statements together, avoiding separate network round trips.
+- [SQLite RETURNING](https://www.sqlite.org/lang_returning.html) returns changed
+  rows directly; no account triggers alter the returned profile afterwards.
+- [Coordination Avoidance in Database Systems](https://www.vldb.org/pvldb/vol8/p185-bailis.pdf)
+  motivates reasoning from invariants: uniqueness/single-use grants still require
+  database arbitration. We remove redundant transport, not the consistency boundary.

@@ -156,9 +156,11 @@ async fn persist(env: &Env, record: &serde_json::Value) -> Result<()> {
     args.push(JsValue::from_f64(
         (record["occurred_at_ms"].as_u64().unwrap() + 604_800_000) as f64,
     ));
-    db.prepare("INSERT INTO billing_trace_spans(event_id,schema_version,service,operation,phase,trace_id,span_id,parent_span_id,occurred_at_ms,duration_ms,outcome,http_status,expires_at_ms) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13) ON CONFLICT(event_id) DO NOTHING").bind(&args)?.run().await?;
-    db.prepare("DELETE FROM billing_trace_spans WHERE event_id IN (SELECT event_id FROM billing_trace_spans WHERE expires_at_ms<?1 ORDER BY expires_at_ms LIMIT 128)")
-        .bind(&[JsValue::from_f64(worker::Date::now().as_millis() as f64)])?.run().await?;
+    db.batch(vec![
+        db.prepare("INSERT INTO billing_trace_spans(event_id,schema_version,service,operation,phase,trace_id,span_id,parent_span_id,occurred_at_ms,duration_ms,outcome,http_status,expires_at_ms) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13) ON CONFLICT(event_id) DO NOTHING").bind(&args)?,
+        db.prepare("DELETE FROM billing_trace_spans WHERE event_id IN (SELECT event_id FROM billing_trace_spans WHERE expires_at_ms<?1 ORDER BY expires_at_ms LIMIT 128)")
+            .bind(&[JsValue::from_f64(worker::Date::now().as_millis() as f64)])?,
+    ]).await?;
     Ok(())
 }
 /// Fixed service-only trace read; no arbitrary SQL filters, account lookups or raw provider metadata.
