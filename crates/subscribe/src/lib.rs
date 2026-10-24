@@ -532,17 +532,6 @@ async fn login(req: &Request, env: &Env, now: i64) -> Result<Response> {
     if !login_prompt_valid(prompt.as_deref()) {
         return problem(400, "invalid_prompt", "Invalid sign-in request.");
     }
-    if prompt.is_none() && store::session(req, env, now).await?.is_some() {
-        return redirect(
-            portal_location(
-                &env.var("APP_ORIGIN")?.to_string(),
-                Some(&local_path),
-                return_to.as_deref(),
-                &allowlist,
-            )?
-            .as_str(),
-        );
-    }
     let discovery = oidc::discover(env).await?;
     let state = crypto::random()?;
     let browser = crypto::random()?;

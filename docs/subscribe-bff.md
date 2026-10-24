@@ -30,7 +30,7 @@ The current Identity contract uses pairwise subjects and fixes access-token audi
 
 Billing calls use Cloudflare's HTTP service binding, not public-origin forwarding. Browser-provided Authorization and principal headers are not forwarded. Proxy routes are explicit; this is not a general-purpose authenticated URL fetcher. OAuth endpoint errors and Billing problem JSON stay distinct. Correlation IDs are retained without logging tokens, codes, cookies or personal data.
 
-External app return URLs must exactly match `RETURN_URL_ALLOWLIST`. Login redirect URI is always fixed; a return destination is transaction/session state. Login lands on Subscribe first. The UI offers the accepted continuation after successful activation, and does not describe a return URL as proof of payment or entitlement; the requesting application must re-check Billing itself.
+External app return URLs must exactly match `RETURN_URL_ALLOWLIST`. Login redirect URI is always fixed; a return destination is transaction/session state. Login lands on Subscribe first. The UI offers the accepted continuation independently of transient activation-success state, and does not describe a return URL as proof of payment or entitlement; the requesting application must re-check Billing itself.
 
 ## Account section: unavoidable identity distinction
 
@@ -104,13 +104,19 @@ top-level OIDC flow on an integration handoff; displaying a second sign-in gate
 before that flow adds user work without adding authentication assurance. No shared
 parent-domain cookie, email join, or cross-origin token bridge is needed.
 
-The normal `/auth/login` entry validates all context and, when its own session is
-still valid, returns directly to the same allowlisted portal destination. Explicit
-`prompt=select_account` bypasses that shortcut and is forwarded to Identity;
-other prompt values and duplicates are rejected. This is the intentional account
-switch surface, not a default forced-login flag. Guest and expired sessions use
-fresh browser-bound state/nonce/PKCE exactly as before. Failed authentication must
-not restart automatic SSO; embedded Account views must use top-level navigation.
+The normal `/auth/login` entry validates all context and always starts fresh
+browser-bound state/nonce/PKCE; Identity can reuse its own SSO session without
+asking for credentials. Already authenticated portal loads do not call this route.
+Explicit `prompt=select_account` is forwarded to Identity; other prompt values and
+duplicates are rejected. Failed authentication must not restart automatic SSO;
+embedded Account views must use top-level navigation.
+
+A proposed local-session shortcut was removed during integration review. Existing
+Account clients use `/auth/login?path=/account&return_to=...` to reconnect to the
+current Identity principal. Reusing an older Subscribe session there would preserve
+the wrong account after an Identity account switch. Keeping explicit login as an
+OIDC transaction eliminates that compatibility special case instead of teaching
+every existing caller a new reconnect parameter.
 
 The local session still cannot outlive either verified token. Live staging
 Discovery advertises refresh tokens and offline_access, but Subscribe's reviewed
@@ -144,7 +150,7 @@ For the research perspective, the formal OAuth analysis linked above distinguish
 session integrity from authentication: eliminating a second UI gate must retain
 browser transaction binding and explicit account ownership, not merge principals.
 
-Focused verification: 18 Subscribe native tests passed, including strict metadata
+Focused verification: 19 Subscribe native tests passed, including strict metadata
 cache expiry/issuer isolation, endpoint validation, allowed prompt selection,
 CSRF, callback ambiguity, safe continuations and the unchanged token expiry.
 The WASM target check passed. The repository's real-workerd metadata regression
@@ -154,5 +160,5 @@ belong to the integrated staging run, not to this module-only result.
 
 The established Account integration entry `/account?reconnect=1` remains an
 explicit account switch: it redirects to `/auth/login?path=/account&prompt=select_account`,
-not the normal reusable-session login. This preserves older embedded clients'
+with explicit account selection. This preserves older embedded clients'
 reconnect behavior even while their current Subscribe cookie is still valid.
