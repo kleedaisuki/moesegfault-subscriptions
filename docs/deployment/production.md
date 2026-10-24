@@ -19,6 +19,85 @@ does not relabel the archive-failed deployment as green. Preserve every existing
 production D1, key, issuer, audience, catalog grant and service binding. Record
 actual release IDs and production browser readback below after execution.
 
+### Completed production release receipt
+
+The authorized coordinated release completed on **2026-10-24 Asia/Singapore**.
+Subscribe [PR #3](https://github.com/kleedaisuki/moesegfault-subscriptions/pull/3)
+and Agents [PR #7](https://github.com/kleedaisuki/moesegfault-agents/pull/7) were
+normally merged. The accepted runtime is the authoritative main implementation,
+not the unmerged local stream-recovery experiment; overlapping PR #8 was closed
+as superseded by the main run-scoped Observer/projection-repair implementation.
+
+| Production unit | Accepted source | Final serving version / traffic |
+| --- | --- | --- |
+| Billing | `6c3586eb6681b21daf0c61af658c3c9f9fb4c974` | `c074158a-909c-416f-9a4d-62209d2738f2`, 100% |
+| Subscribe | Same source | `5833e616-d528-4fa4-91b4-bf2fbac2492b`, 100% |
+| Agents | `265e0ea8bd557d540077afced3bb20b735bbfdfc` | `d198f098-1278-44f8-a2dc-90d62de3a9bc`, 100% |
+
+Subscribe main's [actual staging run 40094394703](https://github.com/kleedaisuki/moesegfault-subscriptions/actions/runs/40094394703)
+passed before [production promotion 40102195561](https://github.com/kleedaisuki/moesegfault-subscriptions/actions/runs/40102195561)
+reused the same checksum-verified WASM/frontend artifact. Rust and React were not
+rebuilt for production. Capture settings and production smoke passed.
+
+Agents [full CI 40100503604](https://github.com/kleedaisuki/moesegfault-agents/actions/runs/40100503604)
+and [staging deployment 40100946077](https://github.com/kleedaisuki/moesegfault-agents/actions/runs/40100946077)
+passed with **25/25 actual-WASM checks and 14/14 real SDK journeys**, including
+compaction, steering and workspace restoration. These are new accepted-source
+results; earlier archive/stream-failed runs were not relabeled successful.
+
+Agents [production 40102985955, attempt 2](https://github.com/kleedaisuki/moesegfault-agents/actions/runs/40102985955)
+completed successfully after the upstream Subscribe production continuation was
+verified ready. Attempt 1 had uploaded the Worker and applied migration 0010,
+then Cloudflare returned an internal error updating the Container application.
+Readback confirmed that partial state before an idempotent failed-job retry of
+the **same** source/artifacts. No reverse migration, grant reset or new key
+generation was used. Attempt 2 completed deployment, authoritative secret
+reassertion, diagnostic retention and public smoke. Its code-upload version was
+`14b54de5-9eef-43e5-a369-084dbd55cffe`; the final secret-only version is the one
+listed in the table, and both production host health responses report source
+`265e0ea8bd557d540077afced3bb20b735bbfdfc`.
+
+The production Container application is version **3 at 100%**, maximum 20
+instances, configured with the accepted `magents-workspace:265e0ea...` tag.
+Staging application version 12 uses the same tag. Both registry publication logs
+report manifest digest
+`sha256:9114bc4855b4227dd5f2116cbde291c8cc874b184d49e7634bc1c97336bce206`.
+This is matching publication evidence, not a claim that the App API exposes a
+resolved image digest or that old active instances bypass rollout grace.
+
+#### Preservation and actual browser readback
+
+- All **seven existing production plans deep-equal the before snapshot**. Existing
+  secret-binding names and public binding fingerprints match, except the intended
+  Subscribe return allowlist and Agents BUILD_ID. Secret values were not retrieved
+  or compared; existing authoritative production inputs were reasserted, not
+  generated or copied from staging.
+- Agents' only newly applied D1 migration was
+  `0010_generic_provider_credentials.sql`: a data-preserving credential-table
+  rebuild with legacy CRUD compatibility. Pre/post credential row count, encrypted
+  byte count and key-version sum were all zero; metadata columns appeared as
+  expected. Accounts, sessions, ledgers, conversations and user buckets were not
+  reset. Keep that schema forward on rollback; an old binary cannot execute new
+  generic-protocol workloads merely because its vendor CRUD remains compatible.
+- Exact production Agents return is accepted; the staging destination is rejected
+  by production with HTTP 400. Both production services' smoke and the independent
+  post-release metadata/catalog checks passed.
+- At **22:46:16 Asia/Singapore**, an existing explicitly owned synthetic production
+  account completed the actual same-tab **Manage subscription → Subscribe SSO →
+  reload → Return to app → `/billing/return` HTTP 302 → `/#usage`** journey.
+  Account and usage were freshly read on return; the original account fingerprint,
+  **Free / live**, zero owned subscriptions, wallet and billing profile remained
+  unchanged. The account dashboard had no catalog cards, no credential re-entry,
+  no alert and no browser page error. Serving Agents SHA and Subscribe asset
+  `/assets/index-CvvppnyQ.js` were checked before the journey.
+- This production acceptance issued/redeemed **no activation code**, created no
+  account/mailbox and approved no spending or new wallet funding. Private state,
+  profile, credential custody and masked screenshots remain owner-protected under
+  repository-local `.temp/production-release-20261024/private`, not in Git.
+  The initial browser harness missed the intermediate 302 by observing only
+  committed frames; it was corrected to assert the actual navigation request,
+  exact HTTP 302/Location and final document, without weakening the expected loop.
+
 ## Current amail USD promotion authority — 2026-10-08 Asia/Singapore
 
 The owner now explicitly authorizes the accepted amail v0.2.0 USD bridge in
