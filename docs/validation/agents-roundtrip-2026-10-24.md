@@ -24,6 +24,7 @@ subject-sector change or audience expansion was performed.
 | Subscribe version | `ac95a750-0cfe-4db1-8721-a862ad6593aa` |
 | Agents | `3e68ff9eb330b4d896816575c9e2d47f4f2833d5`; [successful full CI 40092052174](https://github.com/kleedaisuki/moesegfault-agents/actions/runs/40092052174) |
 | Agents staging deployment | [Deploy 40092345570](https://github.com/kleedaisuki/moesegfault-agents/actions/runs/40092345570); public `/healthz` returned the exact accepted source before this browser run |
+| Agents Worker version | `b88ba2df-8df3-4af7-b5ed-b5ca197a4bb9` |
 
 The exact application return URL is
 `https://adash-staging.moesegfault.dev/billing/return`. It is distinct from the
@@ -31,6 +32,31 @@ unchanged OAuth callback. Subscribe's staging allowlist adds only that exact
 destination; production, changed-query and foreign return URLs were rejected
 with HTTP 400 in actual staging. Production's independent allowlist is unchanged;
 a future production promotion requires coordinated configuration and acceptance.
+
+### Separate release gate: broader workspace regression is not green
+
+The Worker upload/deploy and the eight real roundtrip groups above succeeded,
+but the deployment's final **broader authenticated journey** finished **13 passed,
+one failed** in 499.89 seconds. The failing test is
+`test_workspace_archive_release_resume_restore`: its API-key-authenticated
+`DELETE /v1/sessions/{test_session}` returned HTTP 500 instead of 200. Therefore
+run 40092345570 is **not an overall successful release gate**, and must not be
+described as fully accepted or used to justify production promotion.
+
+An independent comparison of exact sources `43cf770..3e68ff9` found no changed
+archive, Session DO, Workspace, Store, resource/cleanup, container, migration or
+dependency implementation. The API-key authentication branch does not enter the
+new browser AuthSession forced-refresh path; its only added context value is a
+false return-refresh flag. This bounds coupling, but generic `internal_error`
+does not establish the cause or prove the fault predates this deployment.
+
+A subsequent **read-only** GET using the original owned staging acceptance key
+found that exact failed test session closed, with `checkpoint_pending=false`,
+no checkpoint/last error, and both workspace snapshot and conversation checkpoint
+present. No inference, new workspace, cleanup mutation or archive-code change
+was used to conceal the failure. The precise HTTP-response failure remains a
+separate archive/checkpoint investigation; its red gate is recorded independently
+of the successful business roundtrip.
 
 ## Why navigation alone was insufficient
 

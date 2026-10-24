@@ -170,6 +170,8 @@ server configuration. Staging registers exactly
 `https://adash-staging.moesegfault.dev/billing/return` alongside the existing Account
 destination. Production's independent allowlist is unchanged; promoting the Agents
 feature requires a coordinated production allowlist update and acceptance.
+This is an application continuation, not another registered OAuth redirect URI;
+the existing exact `/auth/callback` and issuer/client registration are unchanged.
 
 The return action is ordinary navigation, not proof that a plan was purchased.
 Agents authenticates its own browser session, forces a Billing read through its
