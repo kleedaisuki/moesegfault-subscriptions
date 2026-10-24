@@ -68,3 +68,12 @@ test('Agents production catalog is activation-only with exact grant entitlements
     assert.doesNotMatch(plan.description.en, /synthetic|staging/);
   }
 });
+
+test('catalog rejects aggregate UTF-8 overflow before Worker deployment', async () => {
+  const plans = JSON.parse(await readFile(new URL('../../infra/plans.production.json', import.meta.url), 'utf8'));
+  assert.ok(Buffer.byteLength(JSON.stringify(plans), 'utf8') <= 5120);
+  const oversized = structuredClone(plans);
+  oversized[0].description.en = '界'.repeat(512);
+  assert.ok(Buffer.byteLength(oversized[0].description.en, 'utf8') <= 2048);
+  assert.throws(() => validateCatalog(oversized), /5120-byte/);
+});

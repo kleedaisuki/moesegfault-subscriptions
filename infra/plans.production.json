@@ -93,9 +93,9 @@
       "ja": "Agents Go"
     },
     "description": {
-      "en": "Administrator activation for 30 days. No automatic charge or renewal. Reference policy: USD $10, including $8 API-equivalent credit; this grant is not a payment receipt. Resources are metered separately.",
-      "zh-CN": "管理员激活，有效期 30 天；不会自动扣款或续费。参考策略为 $10 USD，含 $8 API 等值额度；本授权不是支付收据，资源另行计量。",
-      "ja": "管理者による30日間の有効化。自動請求・更新なし。参考方針 USD $10、API相当クレジット $8 込み。支払領収書ではありません。リソースは別途計量。"
+      "en": "30-day administrator activation. No automatic charge or renewal. USD $10 policy includes $8 API credit; not a payment receipt. Resources metered separately.",
+      "zh-CN": "管理员激活30天，不自动扣款或续费。策略$10含$8 API额度；非支付收据，资源另计。",
+      "ja": "管理者が30日有効化。自動請求・更新なし。方針$10、APIクレジット$8込み。支払領収書ではなく、リソース別計量。"
     },
     "duration_days": 30,
     "active": true,
@@ -113,9 +113,9 @@
       "ja": "Agents Plus"
     },
     "description": {
-      "en": "Administrator activation for 30 days. No automatic charge or renewal. Reference policy: USD $20, including $18 API-equivalent credit; this grant is not a payment receipt. Resources are metered separately.",
-      "zh-CN": "管理员激活，有效期 30 天；不会自动扣款或续费。参考策略为 $20 USD，含 $18 API 等值额度；本授权不是支付收据，资源另行计量。",
-      "ja": "管理者による30日間の有効化。自動請求・更新なし。参考方針 USD $20、API相当クレジット $18 込み。支払領収書ではありません。リソースは別途計量。"
+      "en": "30-day administrator activation. No automatic charge or renewal. USD $20 policy includes $18 API credit; not a payment receipt. Resources metered separately.",
+      "zh-CN": "管理员激活30天，不自动扣款或续费。策略$20含$18 API额度；非支付收据，资源另计。",
+      "ja": "管理者が30日有効化。自動請求・更新なし。方針$20、APIクレジット$18込み。支払領収書ではなく、リソース別計量。"
     },
     "duration_days": 30,
     "active": true,
@@ -133,9 +133,9 @@
       "ja": "Agents Pro"
     },
     "description": {
-      "en": "Administrator activation for 30 days. No automatic charge or renewal. Reference policy: USD $200, including $180 API-equivalent credit; this grant is not a payment receipt. Resources are metered separately.",
-      "zh-CN": "管理员激活，有效期 30 天；不会自动扣款或续费。参考策略为 $200 USD，含 $180 API 等值额度；本授权不是支付收据，资源另行计量。",
-      "ja": "管理者による30日間の有効化。自動請求・更新なし。参考方針 USD $200、API相当クレジット $180 込み。支払領収書ではありません。リソースは別途計量。"
+      "en": "30-day administrator activation. No automatic charge or renewal. USD $200 policy includes $180 API credit; not a payment receipt. Resources metered separately.",
+      "zh-CN": "管理员激活30天，不自动扣款或续费。策略$200含$180 API额度；非支付收据，资源另计。",
+      "ja": "管理者が30日有効化。自動請求・更新なし。方針$200、APIクレジット$180込み。支払領収書ではなく、リソース別計量。"
     },
     "duration_days": 30,
     "active": true,

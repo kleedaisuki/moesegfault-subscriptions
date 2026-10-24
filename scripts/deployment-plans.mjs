@@ -24,6 +24,7 @@ export function validateCatalog(catalog) {
     }
     identifiers.add(plan.id);
   }
+  if (Buffer.byteLength(JSON.stringify(catalog), 'utf8') > 5120) throw new Error('Serialized catalog exceeds the 5120-byte Worker text-binding limit.');
   return catalog;
 }
 
