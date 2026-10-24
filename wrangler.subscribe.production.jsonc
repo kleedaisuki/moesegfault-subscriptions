@@ -25,7 +25,7 @@
     "CLIENT_KEY_ID": "subscribe-production-20261005",
     "APP_ORIGIN": "https://subscribe.moesegfault.dev",
     "ACCOUNT_ORIGIN": "https://account.moesegfault.dev",
-    "RETURN_URL_ALLOWLIST": "[\"https://account.moesegfault.dev/subscriptions\"]"
+    "RETURN_URL_ALLOWLIST": "[\"https://account.moesegfault.dev/subscriptions\",\"https://adash.moesegfault.dev/billing/return\"]"
   },
   "d1_databases": [
     {
